@@ -57,6 +57,7 @@
 		"@fontsource/space-grotesk": "^5.2.10",
 		"@modelcontextprotocol/sdk": "^1.27.1",
 		"astro": "^6.0.8",
+		"cloudinary": "^2.10.0",
 		"drizzle-orm": "^0.45.1",
 		"hono": "^4.12.8",
 		"jose": "^6.1.3",
