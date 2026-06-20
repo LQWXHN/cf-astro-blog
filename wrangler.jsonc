@@ -33,7 +33,12 @@
 	"vars": {
 		"SITE_NAME": "My Blog",
 		"SITE_URL": "https://blog.nibutupaopao.top",
-		"TURNSTILE_SITE_KEY": "0x4AAAAAACnxh79QQawnz9UI"
+		"ADMIN_GITHUB_LOGIN": "LQWXHN",
+		"GITHUB_OAUTH_REDIRECT_URI": "https://blog.nibutupaopao.top/api/auth/github/callback",
+		"GITHUB_OAUTH_CLIENT_ID": Ov23liclictuT7qALMr7",
+		"AUTO_DEPLOY_GITHUB_EVENT_TYPE": "rebuild-search-index",
+		"AUTO_DEPLOY_WEBHOOK_URL": "https://api.github.com/repos/LQWXHN/cf-astro-blog/dispatches"
+
 	}
 
 	// 机密变量可通过 `wrangler secret put` 或本地 `.dev.vars` 配置
