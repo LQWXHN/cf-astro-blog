@@ -445,13 +445,13 @@ export function loginPage(options: LoginPageOptions = {}): string {
 	${hasBackgroundImage ? `<div class="bg-image-layer" aria-hidden="true"><img src="${escapedBackgroundImageUrl}" alt="" loading="eager" decoding="async" /></div>` : ""}
 	<main class="entry-shell">
 		<header class="entry-header">
-			<a href="/" class="entry-brand" aria-label="返回 EricTerminal's Blog 首页">
+			<a href="/" class="entry-brand" aria-label="返回 SengokuCola's Blog 首页">
 				<img
-					src="https://assets.ericterminal.com/logo-transparent.png"
+					src="https://tc.nibutupaopao.top/i/2026/06/20/rbrhb8.png"
 					alt=""
 					class="entry-brand-logo"
 				/>
-				<span>EricTerminal's Blog</span>
+				<span>SengokuCola's Blog</span>
 			</a>
 		</header>
 
@@ -468,7 +468,7 @@ export function loginPage(options: LoginPageOptions = {}): string {
 					<svg class="entry-notice-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
 						<path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm0 4a1 1 0 011 1v4a1 1 0 11-2 0V7a1 1 0 011-1zm0 8a1.25 1.25 0 110-2.5A1.25 1.25 0 0110 14z" fill="currentColor"/>
 					</svg>
-					<span>此后台仅供 <strong>@Eric-Terminal</strong> 登录使用，暂不对外开放。</span>
+					<span>此后台仅供 <strong>@LQWXHN</strong> 登录使用，暂不对外开放。</span>
 				</div>
 
 				${error ? `<p class="entry-error" role="alert">${escapeHtml(error)}</p>` : ""}
@@ -489,7 +489,7 @@ export function loginPage(options: LoginPageOptions = {}): string {
 			</div>
 		</section>
 
-		<p class="entry-footer">EricTerminal's Blog &mdash; 后台入口</p>
+		<p class="entry-footer">SengokuCola's Blog &mdash; 后台入口</p>
 	</main>
 </body>
 </html>`;

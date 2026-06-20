@@ -1,7 +1,7 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"main": "@astrojs/cloudflare/entrypoints/server",
-	"name": "cf-astro-blog",
+	"name": "cf-astro-blog-sengokucola",
 	"compatibility_date": "2026-02-10",
 	"compatibility_flags": ["nodejs_compat", "disable_nodejs_process_v2"],
 
@@ -18,28 +18,21 @@
 		{
 			"binding": "DB",
 			"database_name": "blog",
-			"database_id": "30838030-7437-4cb6-b618-7eabe62144da",
+			"database_id": "c2374f21-bb1e-4829-9f16-fa346ca91f7c",
 			"migrations_dir": "drizzle"
-		}
-	],
-
-	"r2_buckets": [
-		{
-			"binding": "MEDIA_BUCKET",
-			"bucket_name": "blog-media"
 		}
 	],
 
 	"kv_namespaces": [
 		{
 			"binding": "SESSION",
-			"id": "ee2c404dd676463d93bea249decdc0ac"
+			"id": "ea419069960a4dc598354764aea46a2b"
 		}
 	],
 
 	"vars": {
 		"SITE_NAME": "My Blog",
-		"SITE_URL": "https://blog.ericterminal.com",
+		"SITE_URL": "https://blog.nibutupaopao.top",
 		"TURNSTILE_SITE_KEY": "0x4AAAAAACnxh79QQawnz9UI"
 	}
 
