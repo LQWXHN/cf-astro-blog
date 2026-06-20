@@ -35,7 +35,7 @@
 		"SITE_URL": "https://blog.nibutupaopao.top",
 		"ADMIN_GITHUB_LOGIN": "LQWXHN",
 		"GITHUB_OAUTH_REDIRECT_URI": "https://blog.nibutupaopao.top/api/auth/github/callback",
-		"GITHUB_OAUTH_CLIENT_ID": Ov23liclictuT7qALMr7",
+		"GITHUB_OAUTH_CLIENT_ID": "Ov23liclictuT7qALMr7",
 		"AUTO_DEPLOY_GITHUB_EVENT_TYPE": "rebuild-search-index",
 		"AUTO_DEPLOY_WEBHOOK_URL": "https://api.github.com/repos/LQWXHN/cf-astro-blog/dispatches"
 
