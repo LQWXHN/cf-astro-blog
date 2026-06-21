@@ -1,11 +1,13 @@
 import { Hono } from "hono";
-import { v2 as cloudinary } from "cloudinary";
 import {
+	deleteMediaObjectAndIndex,
 	getAllowedMediaAcceptValue,
+	getMediaContentTypeForKey,
 	isAllowedImageMimeType,
 	isImageMediaKey,
 	isMediaHashIndexKey,
 	MAX_UPLOAD_BYTES,
+	saveMediaObjectWithDedup,
 } from "@/lib/media";
 import {
 	buildProtectedAssetHeaders,
@@ -29,14 +31,6 @@ const media = new Hono<AdminAppEnv>();
 const DEFAULT_MEDIA_UPLOAD_PREFIX = "uploads";
 const POST_UPLOAD_SCOPE_PATTERN = /^[a-z0-9-]{1,80}$/u;
 
-// ============ Cloudinary 配置 ============
-cloudinary.config({
-	cloud_name: process.env.CLOUDINARY_CLOUD_NAME || "",
-	api_key: process.env.CLOUDINARY_API_KEY || "",
-	api_secret: process.env.CLOUDINARY_API_SECRET || "",
-});
-
-// ============ 辅助函数 ============
 function renderMediaErrorPage(csrfToken: string, message: string) {
 	return adminLayout(
 		"媒体处理失败",
@@ -53,9 +47,11 @@ function validateUploadFile(file: File): string | null {
 	if (!isAllowedImageMimeType(file.type)) {
 		return "仅允许上传 JPG、PNG、WEBP、AVIF 或 GIF 图片";
 	}
+
 	if (file.size > MAX_UPLOAD_BYTES) {
 		return "单个文件不能超过 50 MB ";
 	}
+
 	return null;
 }
 
@@ -78,7 +74,10 @@ function sanitizePostUploadScope(value: string): string | null {
 	const normalized = String(value ?? "")
 		.trim()
 		.toLowerCase();
-	if (!normalized) return null;
+	if (!normalized) {
+		return null;
+	}
+
 	return POST_UPLOAD_SCOPE_PATTERN.test(normalized) ? normalized : null;
 }
 
@@ -90,6 +89,7 @@ function resolveUploadPrefix(body: Record<string, unknown>): {
 	if (!uploadScopeRaw) {
 		return { prefix: DEFAULT_MEDIA_UPLOAD_PREFIX, error: null };
 	}
+
 	const uploadScope = sanitizePostUploadScope(uploadScopeRaw);
 	if (!uploadScope) {
 		return {
@@ -97,6 +97,7 @@ function resolveUploadPrefix(body: Record<string, unknown>): {
 			error: "上传目录参数不合法，仅允许小写字母、数字和短横线",
 		};
 	}
+
 	const uploadKindRaw = getBodyText(body, "uploadKind").toLowerCase();
 	const uploadKind = uploadKindRaw === "cover" ? "cover" : "content";
 	return {
@@ -107,108 +108,78 @@ function resolveUploadPrefix(body: Record<string, unknown>): {
 
 function getMediaDisplayName(key: string) {
 	const normalized = String(key ?? "").trim();
-	if (!normalized) return "-";
+	if (!normalized) {
+		return "-";
+	}
+
 	const segments = normalized.split("/").filter(Boolean);
 	return segments.at(-1) || normalized;
 }
 
 function getMediaDirectoryLabel(key: string) {
 	const normalized = String(key ?? "").trim();
-	if (!normalized || !normalized.includes("/")) return "根目录";
+	if (!normalized || !normalized.includes("/")) {
+		return "根目录";
+	}
+
 	const segments = normalized.split("/").filter(Boolean);
-	if (segments.length <= 1) return "根目录";
+	if (segments.length <= 1) {
+		return "根目录";
+	}
+
 	return segments.slice(0, -1).join("/");
 }
 
-function getPublicIdFromKey(key: string): string {
-	const segments = key.split("/").filter(Boolean);
-	const lastSegment = segments.pop() || "";
-	const nameWithoutExt = lastSegment.replace(/\.[^.]+$/, "");
-	segments.push(nameWithoutExt);
-	return segments.join("/");
-}
-
-function buildCloudinaryUrl(publicId: string): string {
-	const cloudName = process.env.CLOUDINARY_CLOUD_NAME || "";
-	return `https://res.cloudinary.com/${cloudName}/image/upload/${publicId}`;
-}
-
-// ============ Cloudinary 操作函数 ============
-async function uploadToCloudinary(
+async function saveUploadFile(
+	c: { env: AdminAppEnv["Bindings"] },
 	file: File,
-	prefix: string,
-): Promise<{ key: string; url: string; deduplicated: boolean }> {
-	const arrayBuffer = await file.arrayBuffer();
-	const buffer = Buffer.from(arrayBuffer);
-
-	const filename = file.name || "image.jpg";
-	const publicId = `${prefix}/${filename}`.replace(/\.[^.]+$/, "");
-
-	const result = await new Promise<any>((resolve, reject) => {
-		const uploadStream = cloudinary.uploader.upload_stream(
-			{
-				public_id: publicId,
-				resource_type: "image",
-			},
-			(error, result) => {
-				if (error) reject(error);
-				else resolve(result);
-			}
-		);
-		uploadStream.end(buffer);
+	prefix = DEFAULT_MEDIA_UPLOAD_PREFIX,
+) {
+	return saveMediaObjectWithDedup({
+		bucket: c.env.MEDIA_BUCKET,
+		file,
+		prefix,
 	});
-
-	const finalKey = `${prefix}/${result.public_id.split('/').pop()}`;
-	return {
-		key: finalKey,
-		url: result.secure_url,
-		deduplicated: false,
-	};
 }
 
-async function listCloudinaryResources(prefix: string, maxResults: number = 100) {
-	try {
-		const result = await cloudinary.api.resources({
-			type: "upload",
-			prefix: prefix,
-			max_results: Math.min(maxResults, 500),
-			resource_type: "image",
-		});
-		return result.resources.map((res: any) => ({
-			key: res.public_id,
-			size: res.bytes,
-			httpMetadata: {
-				contentType: res.format ? `image/${res.format}` : "image/jpeg",
-			},
-			uploaded: res.created_at,
-			etag: res.etag || "",
-		}));
-	} catch {
-		return [];
+async function listVisibleMediaObjects(
+	bucket: AdminAppEnv["Bindings"]["MEDIA_BUCKET"],
+	limit: number,
+) {
+	const visibleObjects: R2Object[] = [];
+	let cursor: string | undefined;
+
+	while (visibleObjects.length < limit) {
+		const listed = await bucket.list({ cursor, limit: 1000 });
+		for (const object of listed.objects) {
+			if (!isMediaHashIndexKey(object.key)) {
+				visibleObjects.push(object);
+			}
+
+			if (visibleObjects.length >= limit) {
+				break;
+			}
+		}
+
+		if (!listed.truncated) {
+			break;
+		}
+		cursor = listed.cursor;
 	}
+
+	return visibleObjects;
 }
 
-async function deleteCloudinaryResource(publicId: string): Promise<boolean> {
-	try {
-		const result = await cloudinary.uploader.destroy(publicId, {
-			resource_type: "image",
-		});
-		return result.result === "ok";
-	} catch {
-		return false;
-	}
-}
-
-// ============ 路由 ============
 media.use("*", requireAuth);
 
 media.get("/", async (c) => {
 	const session = getAuthenticatedSession(c);
-	let objects: any[] = [];
+	let objects: R2Object[] = [];
+
 	try {
-		objects = await listCloudinaryResources("", 100);
+		objects = await listVisibleMediaObjects(c.env.MEDIA_BUCKET, 100);
 	} catch {
-		// ignore
+		// R2 未绑定时回退为空列表
 	}
 
 	const content = `
@@ -252,11 +223,14 @@ media.get("/", async (c) => {
 							.map((obj) => {
 								const displayName = getMediaDisplayName(obj.key);
 								const directory = getMediaDirectoryLabel(obj.key);
-								const imageUrl = buildCloudinaryUrl(obj.key);
 								return `
 				<div class="media-item">
 					<div class="media-preview">
-						<img src="${escapeAttribute(imageUrl)}" alt="${escapeAttribute(obj.key)}" loading="lazy" />
+						${
+							isImageMediaKey(obj.key)
+								? `<img src="/api/admin/media/file/${encodeRouteParam(obj.key)}" alt="${escapeAttribute(obj.key)}" loading="lazy" />`
+								: `<span class="file-icon">${escapeHtml(obj.key.split(".").pop()?.toUpperCase() || "文件")}</span>`
+						}
 					</div>
 					<div class="media-info">
 						<span class="media-name" title="${escapeAttribute(obj.key)}">${escapeHtml(displayName)}</span>
@@ -265,7 +239,7 @@ media.get("/", async (c) => {
 					</div>
 					<form method="post" action="/api/admin/media/delete/${encodeRouteParam(obj.key)}" class="media-actions" data-confirm-message="${escapeAttribute("确认删除这个媒体文件吗？")}">
 						<input type="hidden" name="_csrf" value="${escapeAttribute(session.csrfToken)}" />
-						<button type="button" class="btn btn-sm" data-copy-value="${escapeAttribute(imageUrl)}">复制链接</button>
+						<button type="button" class="btn btn-sm" data-copy-value="${escapeAttribute(obj.key)}">复制键名</button>
 						<button type="submit" class="btn btn-sm btn-danger">删除</button>
 					</form>
 				</div>`;
@@ -294,6 +268,7 @@ media.post("/upload", async (c) => {
 			400,
 		);
 	}
+
 	const validationError = validateUploadFile(file);
 	if (validationError) {
 		return c.html(
@@ -301,6 +276,7 @@ media.post("/upload", async (c) => {
 			400,
 		);
 	}
+
 	const uploadTarget = resolveUploadPrefix(body);
 	if (uploadTarget.error) {
 		return c.html(
@@ -308,14 +284,9 @@ media.post("/upload", async (c) => {
 			400,
 		);
 	}
-	try {
-		await uploadToCloudinary(file, uploadTarget.prefix);
-	} catch {
-		return c.html(
-			renderMediaErrorPage(session.csrfToken, "上传失败，请稍后再试"),
-			500,
-		);
-	}
+
+	await saveUploadFile(c, file, uploadTarget.prefix);
+
 	return c.redirect("/api/admin/media");
 });
 
@@ -325,23 +296,27 @@ media.post("/upload-async", async (c) => {
 	if (!assertCsrfToken(getBodyText(body, "_csrf"), session)) {
 		return c.json({ message: "CSRF 校验失败" }, 403);
 	}
+
 	const file = parseUploadFile(body);
 	if (!file) {
 		return c.json({ message: "请选择要上传的文件" }, 400);
 	}
+
 	const validationError = validateUploadFile(file);
 	if (validationError) {
 		return c.json({ message: validationError }, 400);
 	}
+
 	const uploadTarget = resolveUploadPrefix(body);
 	if (uploadTarget.error) {
 		return c.json({ message: uploadTarget.error }, 400);
 	}
+
 	try {
-		const uploaded = await uploadToCloudinary(file, uploadTarget.prefix);
+		const uploaded = await saveUploadFile(c, file, uploadTarget.prefix);
 		return c.json({
 			key: uploaded.key,
-			url: uploaded.url,
+			url: `/media/${uploaded.key}`,
 			deduplicated: uploaded.deduplicated,
 			message: uploaded.deduplicated
 				? "检测到重复内容，已复用已有媒体文件"
@@ -355,10 +330,24 @@ media.post("/upload-async", async (c) => {
 media.get("/file/*", async (c) => {
 	const decodedKey = extractWildcardMediaKey(c, "/admin/media/file/");
 	const key = sanitizeMediaKey(decodedKey);
-	if (!key) return c.notFound();
-	const publicId = getPublicIdFromKey(key);
-	const imageUrl = buildCloudinaryUrl(publicId);
-	return c.redirect(imageUrl, 302);
+	if (!key) {
+		return c.notFound();
+	}
+
+	const contentType = getMediaContentTypeForKey(key);
+	if (!contentType) {
+		return c.notFound();
+	}
+
+	const object = await c.env.MEDIA_BUCKET.get(key);
+
+	if (!object) {
+		return c.notFound();
+	}
+
+	return new Response(object.body, {
+		headers: buildProtectedAssetHeaders(contentType),
+	});
 });
 
 media.post("/delete/*", async (c) => {
@@ -367,14 +356,17 @@ media.post("/delete/*", async (c) => {
 	if (!assertCsrfToken(getBodyText(body, "_csrf"), session)) {
 		return c.text("CSRF 校验失败", 403);
 	}
+
 	const decodedKey = extractWildcardMediaKey(c, "/admin/media/delete/");
 	const key = sanitizeMediaKey(decodedKey);
-	if (!key) return c.text("媒体键名不合法", 400);
+	if (!key) {
+		return c.text("媒体键名不合法", 400);
+	}
 	if (isMediaHashIndexKey(key)) {
 		return c.text("不允许删除内部索引对象", 400);
 	}
-	const publicId = getPublicIdFromKey(key);
-	await deleteCloudinaryResource(publicId);
+
+	await deleteMediaObjectAndIndex(c.env.MEDIA_BUCKET, key);
 	return c.redirect("/api/admin/media");
 });
 
