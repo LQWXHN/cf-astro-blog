@@ -290,8 +290,8 @@ function isInternalHref(href: string) {
 
 	<section class="section-head">
 		<div>
-			<span class="section-kicker">最近更新</span>
-			<h2 class="section-heading">最近更新</h2>
+			<span class="section-kicker">精选内容</span>
+			<h2 class="section-heading">精选内容</h2>
 		</div>
 		<p class="section-subheading">
 			{recentSectionSubheading}
@@ -319,7 +319,7 @@ function isInternalHref(href: string) {
 		</div>
 	) : (
 		<div class="empty-state glass-panel">
-			<p>还没有公开文章，先去后台发布第一篇内容。</p>
+			<p>这里什么都没有~</p>
 		</div>
 	)}
 </Base>
@@ -560,7 +560,7 @@ function isInternalHref(href: string) {
 	}
 
 	.hero-main-media:not(.hero-main-media-has-image)::after {
-		content: "图片预留位";
+		content: "ChatGPT";
 		position: absolute;
 		right: 0.9rem;
 		bottom: 0.75rem;

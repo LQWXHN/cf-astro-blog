@@ -21,9 +21,9 @@ export interface CommentConfig {
 }
 
 export const siteConfig: SiteConfig = {
-	name: "SengokuCola 的博客",
+	name: "SengokuCola 的主页",
 	url: "https://blog.nibutupaopao.top",
-	description: "记录 Cloudflare、分享热门开源项目与长期有效的技术经验",
+	description: "SengokuCola 的主页",
 	author: "SengokuCola",
 	language: "zh-CN",
 	comments: {

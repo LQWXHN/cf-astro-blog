@@ -38,7 +38,7 @@ const selectedDateLabel = hasDateFilter
 			type="search"
 			name="q"
 			class="search-input"
-			placeholder="搜索文章标题、摘要或关键词"
+			placeholder="搜索关键词"
 			aria-label="搜索文章"
 			autocomplete="off"
 			value={initialQuery}
@@ -53,7 +53,7 @@ const selectedDateLabel = hasDateFilter
 				))}
 			</select>
 		) : null}
-		<button type="submit" class="button search-button">开始搜索</button>
+		<button type="submit" class="button search-button">点击搜索</button>
 
 			{tags.length > 0 ? (
 				<div class="search-tags-shell">

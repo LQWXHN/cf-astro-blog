@@ -445,13 +445,13 @@ export function loginPage(options: LoginPageOptions = {}): string {
 	${hasBackgroundImage ? `<div class="bg-image-layer" aria-hidden="true"><img src="${escapedBackgroundImageUrl}" alt="" loading="eager" decoding="async" /></div>` : ""}
 	<main class="entry-shell">
 		<header class="entry-header">
-			<a href="/" class="entry-brand" aria-label="返回 SengokuCola's Blog 首页">
+			<a href="/" class="entry-brand" aria-label="返回 SengokuCola's HOME 首页">
 				<img
 					src="https://tc.nibutupaopao.top/i/2026/06/20/rbrhb8.png"
 					alt=""
 					class="entry-brand-logo"
 				/>
-				<span>SengokuCola's Blog</span>
+				<span>SengokuCola's HOME</span>
 			</a>
 		</header>
 
@@ -489,7 +489,7 @@ export function loginPage(options: LoginPageOptions = {}): string {
 			</div>
 		</section>
 
-		<p class="entry-footer">SengokuCola's Blog &mdash; 后台入口</p>
+		<p class="entry-footer">SengokuCola's HOME &mdash; 后台入口</p>
 	</main>
 </body>
 </html>`;
