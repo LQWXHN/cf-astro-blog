@@ -1,6 +1,7 @@
 import { Hono } from "hono";
-import { and, asc, desc, eq, ilike, or } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm"; // 🆕 添加 sql
 import { toolCategories, toolItems } from "@/db/schema";
+import { escapeAttribute, escapeHtml } from "@/lib/security"; // 🆕 添加安全工具函数
 import {
   type AdminAppEnv,
   assertCsrfToken,
