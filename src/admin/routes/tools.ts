@@ -20,7 +20,9 @@ tools.get("/", async (c) => {
   try {
     const session = getAuthenticatedSession(c);
     const db = getDb(c.env.DB);
+    const search = c.req.query("q") || "";
 
+    // 获取所有分类及其工具数量
     const categories = await db
       .select({
         id: toolCategories.id,
@@ -33,7 +35,8 @@ tools.get("/", async (c) => {
       .groupBy(toolCategories.id)
       .orderBy(asc(toolCategories.sortOrder), asc(toolCategories.name));
 
-    const items = await db
+    // 工具列表（支持搜索）
+    let itemsQuery = db
       .select({
         id: toolItems.id,
         name: toolItems.name,
@@ -41,9 +44,21 @@ tools.get("/", async (c) => {
         categoryName: toolCategories.name,
       })
       .from(toolItems)
-      .leftJoin(toolCategories, eq(toolItems.categoryId, toolCategories.id))
+      .leftJoin(toolCategories, eq(toolItems.categoryId, toolCategories.id));
+
+    if (search) {
+      itemsQuery = itemsQuery.where(
+        or(
+          ilike(toolItems.name, `%${search}%`),
+          ilike(toolItems.description, `%${search}%`)
+        )
+      );
+    }
+
+    const items = await itemsQuery
       .orderBy(asc(toolCategories.name), asc(toolItems.sortOrder), asc(toolItems.name));
 
+    // 构建分类表格
     const categoriesHtml =
       categories.length === 0
         ? `<tr><td colspan="3" class="empty-state">暂无分类，请先创建。</td></tr>`
@@ -65,9 +80,10 @@ tools.get("/", async (c) => {
             )
             .join("");
 
+    // 构建工具表格
     const itemsHtml =
       items.length === 0
-        ? `<tr><td colspan="4" class="empty-state">暂无工具，请添加。</td></tr>`
+        ? `<tr><td colspan="4" class="empty-state">暂无工具${search ? `（关键词："${escapeHtml(search)}"）` : ""}，请添加。</td></tr>`
         : items
             .map(
               (item) => `
@@ -107,7 +123,17 @@ tools.get("/", async (c) => {
           </tbody>
         </table>
       </div>
+
       <h2>所有工具</h2>
+      <!-- 搜索框 -->
+      <div class="table-actions" style="margin-bottom: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
+        <form method="get" action="/api/admin/tools" style="display: flex; gap: 0.5rem; align-items: center; flex: 1; min-width: 200px;">
+          <input type="text" name="q" placeholder="搜索工具名称或描述..." value="${escapeAttribute(search)}" class="form-input" style="flex: 1; min-width: 150px;" />
+          <button type="submit" class="btn btn-sm">搜索</button>
+          ${search ? `<a href="/api/admin/tools" class="btn btn-sm">清除</a>` : ""}
+        </form>
+        ${search ? `<span class="form-help" style="margin-top: 0;">共找到 ${items.length} 个匹配的工具</span>` : ""}
+      </div>
       <div class="table-card">
         <table class="data-table">
           <thead>

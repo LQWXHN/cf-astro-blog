@@ -43,12 +43,28 @@ const categorized = categories.map((cat) => ({
     <p class="page-intro">常用的工具，点击直达</p>
   </section>
 
+  <!-- ===== 搜索框 ===== -->
+  <section class="tools-search glass-panel">
+    <div class="tools-search-box">
+      <input
+        type="text"
+        id="toolSearchInput"
+        placeholder="搜索工具名称或描述..."
+        class="tools-search-input"
+        autocomplete="off"
+      />
+      <span id="toolSearchClear" class="tools-search-clear" style="display: none;">✕</span>
+    </div>
+    <p id="toolSearchStatus" class="tools-search-status"></p>
+  </section>
+
+  <!-- ===== 分类和工具列表 ===== -->
   {
     categorized.map((category) => (
-      <section class="tools-category-section glass-panel">
+      <section class="tools-category-section glass-panel" data-category-id={category.id}>
         <div class="tools-category-head">
           <span class="tools-category-kicker">{category.name}</span>
-          <span class="tools-category-count">{category.items.length} 个工具</span>
+          <span class="tools-category-count" data-category-count>{category.items.length} 个工具</span>
         </div>
         <div class="tools-grid">
           {
@@ -59,6 +75,8 @@ const categorized = categories.map((cat) => ({
                 rel="noopener noreferrer"
                 class="tool-card"
                 title={tool.name}
+                data-name={tool.name}
+                data-desc={tool.description || ''}
               >
                 <div class="tool-card-icon">
                   {tool.icon ? (
@@ -83,7 +101,7 @@ const categorized = categories.map((cat) => ({
     categorized.length === 0 && (
       <section class="tools-category-section glass-panel">
         <div class="tools-category-head">
-          <span class="tools-category-kicker">📭 暂无工具</span>
+          <span class="tools-category-kicker">暂无工具</span>
         </div>
         <div class="empty-state">请前往后台添加工具分类和工具条目。</div>
       </section>
@@ -100,6 +118,69 @@ const categorized = categories.map((cat) => ({
     gap: 0.8rem;
     padding: clamp(1.8rem, 1.5rem + 2vw, 3rem);
     margin-bottom: 1.5rem;
+  }
+
+  /* ===== 搜索框 ===== */
+  .tools-search {
+    --glass-panel-opacity: calc(var(--hero-card-opacity, 14) / 100);
+    --glass-panel-blur: var(--hero-card-blur, 18px);
+    padding: 1.2rem 1.5rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .tools-search-box {
+    display: flex;
+    align-items: center;
+    position: relative;
+  }
+
+  .tools-search-input {
+    width: 100%;
+    padding: 0.8rem 1.2rem;
+    padding-right: 3rem;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-tertiary);
+    color: var(--color-text);
+    font-size: 0.95rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .tools-search-input:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.15);
+  }
+
+  .tools-search-clear {
+    position: absolute;
+    right: 1rem;
+    cursor: pointer;
+    font-size: 1.1rem;
+    color: var(--color-text-muted);
+    padding: 0.2rem;
+    line-height: 1;
+    transition: color 0.2s;
+    user-select: none;
+  }
+
+  .tools-search-clear:hover {
+    color: var(--color-text);
+  }
+
+  .tools-search-status {
+    margin: 0;
+    font-size: 0.88rem;
+    color: var(--color-text-muted);
+    min-height: 1.4rem;
+    display: none;
+  }
+
+  .tools-search-status.is-active {
+    display: block;
   }
 
   /* ===== 分类区域 ===== */
@@ -312,6 +393,15 @@ const categorized = categories.map((cat) => ({
     .tools-category-count {
       font-size: 0.7rem;
     }
+
+    .tools-search {
+      padding: 0.8rem 1rem;
+    }
+
+    .tools-search-input {
+      padding: 0.6rem 1rem;
+      font-size: 0.88rem;
+    }
   }
 
   @media (max-width: 420px) {
@@ -321,3 +411,68 @@ const categorized = categories.map((cat) => ({
     }
   }
 </style>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const searchInput = document.getElementById('toolSearchInput');
+    const clearBtn = document.getElementById('toolSearchClear');
+    const statusEl = document.getElementById('toolSearchStatus');
+    const cards = document.querySelectorAll('.tool-card');
+    const categorySections = document.querySelectorAll('.tools-category-section');
+    const categoryCounts = document.querySelectorAll('[data-category-count]');
+
+    function filterTools(query) {
+      const q = query.trim().toLowerCase();
+      let totalVisible = 0;
+
+      cards.forEach(card => {
+        const name = (card.getAttribute('data-name') || '').toLowerCase();
+        const desc = (card.getAttribute('data-desc') || '').toLowerCase();
+        const match = !q || name.includes(q) || desc.includes(q);
+        card.style.display = match ? '' : 'none';
+        if (match) totalVisible++;
+      });
+
+      // 处理分类显示和计数
+      categorySections.forEach(section => {
+        const sectionCards = section.querySelectorAll('.tool-card');
+        let visibleInSection = 0;
+        sectionCards.forEach(card => {
+          if (card.style.display !== 'none') visibleInSection++;
+        });
+        const countEl = section.querySelector('[data-category-count]');
+        if (countEl) {
+          countEl.textContent = `${visibleInSection} 个工具`;
+        }
+        section.style.display = visibleInSection === 0 ? 'none' : '';
+      });
+
+      // 更新状态信息
+      if (q && totalVisible === 0) {
+        statusEl.textContent = `没有找到包含 “${q}” 的工具`;
+        statusEl.className = 'tools-search-status is-active';
+      } else if (q) {
+        statusEl.textContent = `找到 ${totalVisible} 个工具`;
+        statusEl.className = 'tools-search-status is-active';
+      } else {
+        statusEl.textContent = '';
+        statusEl.className = 'tools-search-status';
+      }
+
+      clearBtn.style.display = q ? 'inline-block' : 'none';
+    }
+
+    searchInput.addEventListener('input', () => {
+      filterTools(searchInput.value);
+    });
+
+    clearBtn.addEventListener('click', () => {
+      searchInput.value = '';
+      filterTools('');
+      searchInput.focus();
+    });
+
+    // 初始状态
+    filterTools('');
+  });
+</script>
