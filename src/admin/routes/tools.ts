@@ -20,7 +20,9 @@ tools.get("/", async (c) => {
   try {
     const session = getAuthenticatedSession(c);
     const db = getDb(c.env.DB);
+    const search = c.req.query("q") || "";
 
+    // 获取所有分类及其工具数量
     const categories = await db
       .select({
         id: toolCategories.id,
@@ -33,19 +35,31 @@ tools.get("/", async (c) => {
       .groupBy(toolCategories.id)
       .orderBy(asc(toolCategories.sortOrder), asc(toolCategories.name));
 
-    const allTools = await db
+    // 获取工具列表（支持搜索过滤）
+    let itemsQuery = db
       .select({
         id: toolItems.id,
         name: toolItems.name,
         description: toolItems.description,
-        url: toolItems.url,
-        icon: toolItems.icon,
         categoryName: toolCategories.name,
       })
       .from(toolItems)
-      .leftJoin(toolCategories, eq(toolItems.categoryId, toolCategories.id))
+      .leftJoin(toolCategories, eq(toolItems.categoryId, toolCategories.id));
+
+    if (search) {
+      const pattern = `%${search}%`;
+      itemsQuery = itemsQuery.where(
+        or(
+          sql`lower(${toolItems.name}) LIKE ${pattern}`,
+          sql`lower(${toolItems.description}) LIKE ${pattern}`
+        )
+      );
+    }
+
+    const items = await itemsQuery
       .orderBy(asc(toolCategories.name), asc(toolItems.sortOrder), asc(toolItems.name));
 
+    // 构建分类表格
     const categoriesHtml =
       categories.length === 0
         ? `<tr><td colspan="3" class="empty-state">暂无分类，请先创建。</td></tr>`
@@ -67,10 +81,11 @@ tools.get("/", async (c) => {
             )
             .join("");
 
+    // 构建工具表格
     const itemsHtml =
-      allTools.length === 0
-        ? `<tr><td colspan="4" class="empty-state">暂无工具，请添加。</td></tr>`
-        : allTools
+      items.length === 0
+        ? `<tr><td colspan="4" class="empty-state">暂无工具${search ? `（关键词："${escapeHtml(search)}"）` : ""}，请添加。</td></tr>`
+        : items
             .map(
               (item) => `
                 <tr>
@@ -89,9 +104,6 @@ tools.get("/", async (c) => {
             )
             .join("");
 
-    // 安全地序列化数据，避免 XSS 和语法错误
-    const toolsJson = JSON.stringify(allTools);
-
     const content = `
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
         <h1 style="margin: 0;">工具箱管理</h1>
@@ -101,24 +113,14 @@ tools.get("/", async (c) => {
         </div>
       </div>
 
-      <!-- ===== 快速跳转搜索框（实时下拉框） ===== -->
-      <div class="tools-quick-search">
-        <div class="tools-quick-search-box">
-          <input
-            type="text"
-            id="toolsQuickSearchInput"
-            placeholder="快速跳转：输入关键词进行搜索..."
-            class="tools-quick-search-input"
-            autocomplete="off"
-          />
-          <span id="toolsQuickSearchClear" class="tools-quick-search-clear" style="display: none;">✕</span>
-        </div>
-        <div class="tools-quick-dropdown" id="toolsQuickDropdown" style="display:none;">
-          <ul id="toolsQuickResults"></ul>
-          <div class="tools-quick-footer">
-            找到 <span id="toolsQuickCount">0</span> 个工具
-          </div>
-        </div>
+      <!-- ===== 搜索表单 ===== -->
+      <div style="margin-bottom: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
+        <form method="get" action="/api/admin/tools" style="display: flex; gap: 0.5rem; align-items: center; flex: 1; min-width: 200px;">
+          <input type="text" name="q" placeholder="搜索工具名称或描述..." value="${escapeAttribute(search)}" class="form-input" style="flex: 1; min-width: 150px;" />
+          <button type="submit" class="btn btn-sm">搜索</button>
+          ${search ? `<a href="/api/admin/tools" class="btn btn-sm">清除</a>` : ""}
+        </form>
+        ${search ? `<span class="form-help" style="margin-top: 0;">共找到 ${items.length} 个匹配的工具</span>` : ""}
       </div>
 
       <div class="table-card">
@@ -152,122 +154,6 @@ tools.get("/", async (c) => {
           </tbody>
         </table>
       </div>
-
-      <script>
-        (function() {
-          var allTools = ${toolsJson};  // 直接使用 JSON 数据
-          var searchInput = document.getElementById('toolsQuickSearchInput');
-          var clearBtn = document.getElementById('toolsQuickSearchClear');
-          var dropdown = document.getElementById('toolsQuickDropdown');
-          var resultsList = document.getElementById('toolsQuickResults');
-          var countSpan = document.getElementById('toolsQuickCount');
-
-          function renderDropdown(query) {
-            var q = query.trim().toLowerCase();
-            var filtered = [];
-            if (q) {
-              filtered = allTools.filter(function(tool) {
-                return (tool.name && tool.name.toLowerCase().indexOf(q) !== -1) ||
-                       (tool.description && tool.description.toLowerCase().indexOf(q) !== -1);
-              });
-            }
-
-            if (filtered.length === 0 || !q) {
-              dropdown.style.display = 'none';
-              return;
-            }
-
-            var html = '';
-            for (var i = 0; i < filtered.length; i++) {
-              var tool = filtered[i];
-              var iconHtml = tool.icon
-                ? '<img src="' + tool.icon.replace(/"/g, '&quot;') + '" alt="" />'
-                : '<span class="tools-quick-icon-placeholder">' + tool.name.charAt(0) + '</span>';
-              html += '<li data-url="' + tool.url.replace(/"/g, '&quot;') + '">';
-              html += '<div class="tools-quick-icon">' + iconHtml + '</div>';
-              html += '<div class="tools-quick-info">';
-              html += '<span class="tools-quick-name">' + tool.name.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</span>';
-              html += '<span class="tools-quick-desc">' + (tool.description || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</span>';
-              html += '</div></li>';
-            }
-            resultsList.innerHTML = html;
-
-            countSpan.textContent = filtered.length;
-            dropdown.style.display = 'flex';
-
-            var items = resultsList.querySelectorAll('li');
-            for (var j = 0; j < items.length; j++) {
-              (function(li) {
-                li.addEventListener('click', function() {
-                  window.open(li.dataset.url, '_blank');
-                  dropdown.style.display = 'none';
-                  searchInput.value = '';
-                  clearBtn.style.display = 'none';
-                });
-              })(items[j]);
-            }
-          }
-
-          searchInput.addEventListener('input', function() {
-            var val = searchInput.value;
-            clearBtn.style.display = val ? 'inline-block' : 'none';
-            renderDropdown(val);
-          });
-
-          searchInput.addEventListener('blur', function() {
-            setTimeout(function() { dropdown.style.display = 'none'; }, 200);
-          });
-
-          searchInput.addEventListener('focus', function() {
-            if (searchInput.value.trim()) renderDropdown(searchInput.value);
-          });
-
-          clearBtn.addEventListener('click', function() {
-            searchInput.value = '';
-            clearBtn.style.display = 'none';
-            dropdown.style.display = 'none';
-            searchInput.focus();
-          });
-
-          var selectedIndex = -1;
-          searchInput.addEventListener('keydown', function(e) {
-            var items = resultsList.querySelectorAll('li');
-            if (items.length === 0) return;
-
-            if (e.key === 'ArrowDown') {
-              e.preventDefault();
-              selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
-              updateSelected(items);
-            } else if (e.key === 'ArrowUp') {
-              e.preventDefault();
-              selectedIndex = Math.max(selectedIndex - 1, -1);
-              updateSelected(items);
-            } else if (e.key === 'Enter') {
-              e.preventDefault();
-              if (selectedIndex >= 0 && items[selectedIndex]) {
-                window.open(items[selectedIndex].dataset.url, '_blank');
-                dropdown.style.display = 'none';
-                searchInput.value = '';
-                clearBtn.style.display = 'none';
-                selectedIndex = -1;
-              }
-            }
-          });
-
-          function updateSelected(items) {
-            for (var i = 0; i < items.length; i++) {
-              if (i === selectedIndex) {
-                items[i].style.background = 'rgba(10,132,255,0.12)';
-                items[i].scrollIntoView({ block: 'nearest' });
-              } else {
-                items[i].style.background = '';
-              }
-            }
-          }
-
-          dropdown.style.display = 'none';
-        })();
-      </script>
     `;
 
     return c.html(adminLayout("工具箱管理", content, { csrfToken: session.csrfToken }));

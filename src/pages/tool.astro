@@ -5,6 +5,10 @@ import { toolCategories, toolItems } from "@/db/schema";
 import Base from "@/layouts/Base.astro";
 import { getDb } from "@/lib/db";
 
+// 获取 URL 查询参数 q
+const searchQuery = Astro.url.searchParams.get("q") || "";
+const lowerQuery = searchQuery.toLowerCase().trim();
+
 // 获取所有分类及其工具
 const db = getDb(env.DB);
 const categories = await db
@@ -29,94 +33,102 @@ const allTools = await db
   .from(toolItems)
   .orderBy(asc(toolItems.categoryId), asc(toolItems.sortOrder), asc(toolItems.name));
 
-// 按分类分组
-const categorized = categories.map((cat) => ({
-  ...cat,
-  items: allTools.filter((tool) => tool.categoryId === cat.id),
-}));
+// 按关键词过滤工具
+let filteredTools = allTools;
+if (lowerQuery) {
+  filteredTools = allTools.filter(
+    (tool) =>
+      tool.name.toLowerCase().includes(lowerQuery) ||
+      (tool.description && tool.description.toLowerCase().includes(lowerQuery))
+  );
+}
 
-// 安全地序列化数据：转义 </ 防止破坏 <script> 标签
-const toolsJson = JSON.stringify(allTools).replace(/<\//g, '<\\/');
+// 按分类分组（只包含匹配的工具）
+const categorized = categories
+  .map((cat) => ({
+    ...cat,
+    items: filteredTools.filter((tool) => tool.categoryId === cat.id),
+  }))
+  .filter((cat) => cat.items.length > 0); // 隐藏空分类
+
+const totalFound = filteredTools.length;
 ---
 
-<Base title="百宝箱" description="常用的工具，点击直达">
+<Base title="工具箱" description="常用的工具，点击直达">
   <section class="tools-hero glass-panel">
     <span class="section-kicker">🧰 工具箱</span>
     <h1 class="page-title">工具箱</h1>
     <p class="page-intro">常用的工具，点击直达</p>
   </section>
 
-  <!-- ===== 搜索框（实时下拉框） ===== -->
+  <!-- ===== 搜索表单（手动搜索） ===== -->
   <section class="tools-search glass-panel">
-    <div class="tools-search-box">
-      <input
-        type="text"
-        id="toolSearchInput"
-        placeholder="输入关键词进行搜索..."
-        class="tools-search-input"
-        autocomplete="off"
-      />
-      <span id="toolSearchClear" class="tools-search-clear" style="display: none;">✕</span>
-    </div>
-    <!-- 下拉框 -->
-    <div class="tools-search-dropdown" id="toolSearchDropdown" style="display:none;">
-      <ul id="toolSearchResults"></ul>
-      <div class="tools-search-footer">
-        找到 <span id="toolSearchCount">0</span> 个工具
+    <form method="get" action="/tool" class="tools-search-form">
+      <div class="tools-search-box">
+        <input
+          type="text"
+          name="q"
+          placeholder="输入关键词搜索工具..."
+          value={searchQuery}
+          class="tools-search-input"
+          autocomplete="off"
+        />
+        <button type="submit" class="tools-search-btn">搜索</button>
+        {searchQuery && (
+          <a href="/tool" class="tools-search-clear-btn">清除</a>
+        )}
       </div>
-    </div>
-    <p id="toolSearchStatus" class="tools-search-status"></p>
+      {searchQuery && (
+        <p class="tools-search-status">
+          找到 <strong>{totalFound}</strong> 个匹配的工具
+        </p>
+      )}
+    </form>
   </section>
 
   <!-- ===== 分类和工具列表 ===== -->
-  {
+  {categorized.length > 0 ? (
     categorized.map((category) => (
       <section class="tools-category-section glass-panel" data-category-id={category.id}>
         <div class="tools-category-head">
           <span class="tools-category-kicker">{category.name}</span>
-          <span class="tools-category-count" data-category-count>{category.items.length} 个工具</span>
+          <span class="tools-category-count">{category.items.length} 个工具</span>
         </div>
         <div class="tools-grid">
-          {
-            category.items.map((tool) => (
-              <a
-                href={tool.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="tool-card"
-                title={tool.name}
-                data-name={tool.name}
-                data-desc={tool.description || ''}
-              >
-                <div class="tool-card-icon">
-                  {tool.icon ? (
-                    <img src={tool.icon} alt={tool.name} loading="lazy" />
-                  ) : (
-                    <span class="tool-icon-placeholder">{tool.name.slice(0, 1)}</span>
-                  )}
-                </div>
-                <div class="tool-card-body">
-                  <h2 class="tool-card-name">{tool.name}</h2>
-                  {tool.description && <p class="tool-card-desc">{tool.description}</p>}
-                </div>
-              </a>
-            ))
-          }
+          {category.items.map((tool) => (
+            <a
+              href={tool.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="tool-card"
+              title={tool.name}
+            >
+              <div class="tool-card-icon">
+                {tool.icon ? (
+                  <img src={tool.icon} alt={tool.name} loading="lazy" />
+                ) : (
+                  <span class="tool-icon-placeholder">{tool.name.slice(0, 1)}</span>
+                )}
+              </div>
+              <div class="tool-card-body">
+                <h2 class="tool-card-name">{tool.name}</h2>
+                {tool.description && <p class="tool-card-desc">{tool.description}</p>}
+              </div>
+            </a>
+          ))}
         </div>
       </section>
     ))
-  }
-
-  {
-    categorized.length === 0 && (
-      <section class="tools-category-section glass-panel">
-        <div class="tools-category-head">
-          <span class="tools-category-kicker">暂无工具</span>
-        </div>
-        <div class="empty-state">请前往后台添加工具分类和工具条目。</div>
-      </section>
-    )
-  }
+  ) : (
+    <section class="tools-category-section glass-panel">
+      <div class="tools-category-head">
+        <span class="tools-category-kicker">无匹配结果</span>
+      </div>
+      <div class="empty-state">
+        {searchQuery ? `没有找到包含 “${searchQuery}” 的工具` : '请前往后台添加工具分类和工具条目。'}
+      </div>
+    </section>
+  )}
 </Base>
 
 <style>
@@ -130,28 +142,31 @@ const toolsJson = JSON.stringify(allTools).replace(/<\//g, '<\\/');
     margin-bottom: 1.5rem;
   }
 
-  /* ===== 搜索框 ===== */
+  /* ===== 搜索表单 ===== */
   .tools-search {
     --glass-panel-opacity: calc(var(--hero-card-opacity, 14) / 100);
     --glass-panel-blur: var(--hero-card-blur, 18px);
     padding: 1.2rem 1.5rem;
     margin-bottom: 1.5rem;
+  }
+
+  .tools-search-form {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
-    position: relative;
+    gap: 0.6rem;
   }
 
   .tools-search-box {
     display: flex;
+    gap: 0.6rem;
     align-items: center;
-    position: relative;
+    flex-wrap: wrap;
   }
 
   .tools-search-input {
-    width: 100%;
+    flex: 1;
+    min-width: 200px;
     padding: 0.8rem 1.2rem;
-    padding-right: 3rem;
     border-radius: var(--radius-pill);
     border: 1px solid var(--color-border);
     background: var(--color-bg-tertiary);
@@ -166,125 +181,48 @@ const toolsJson = JSON.stringify(allTools).replace(/<\//g, '<\\/');
     box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.15);
   }
 
-  .tools-search-clear {
-    position: absolute;
-    right: 1rem;
+  .tools-search-btn {
+    padding: 0.8rem 1.6rem;
+    border-radius: var(--radius-pill);
+    border: none;
+    background: var(--color-accent);
+    color: #fff;
+    font-weight: 600;
     cursor: pointer;
-    font-size: 1.1rem;
-    color: var(--color-text-muted);
-    padding: 0.2rem;
-    line-height: 1;
-    transition: color 0.2s;
-    user-select: none;
+    transition: background 0.2s, transform 0.1s;
   }
 
-  .tools-search-clear:hover {
-    color: var(--color-text);
+  .tools-search-btn:hover {
+    background: var(--color-accent-hover);
+  }
+
+  .tools-search-btn:active {
+    transform: scale(0.97);
+  }
+
+  .tools-search-clear-btn {
+    padding: 0.8rem 1.2rem;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-text-muted);
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: background 0.2s;
+  }
+
+  .tools-search-clear-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
   }
 
   .tools-search-status {
     margin: 0;
-    font-size: 0.88rem;
-    color: var(--color-text-muted);
-    min-height: 1.4rem;
-    display: none;
+    font-size: 0.95rem;
+    color: var(--color-text-secondary);
   }
 
-  .tools-search-status.is-active {
-    display: block;
-  }
-
-  /* ===== 下拉框 ===== */
-  .tools-search-dropdown {
-    position: absolute;
-    top: calc(100% - 0.5rem);
-    left: 1.5rem;
-    right: 1.5rem;
-    background: var(--color-bg-secondary);
-    backdrop-filter: blur(18px) saturate(140%);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-strong);
-    z-index: 10;
-    max-height: 320px;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .tools-search-dropdown ul {
-    list-style: none;
-    margin: 0;
-    padding: 0.4rem 0;
-    overflow-y: auto;
-    flex: 1;
-  }
-
-  .tools-search-dropdown li {
-    padding: 0.6rem 1rem;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
-    transition: background 0.15s;
-  }
-
-  .tools-search-dropdown li:hover {
-    background: rgba(10, 132, 255, 0.08);
-  }
-
-  .tools-search-dropdown li .tools-quick-icon {
-    width: 28px;
-    height: 28px;
-    flex-shrink: 0;
-    border-radius: 6px;
-    overflow: hidden;
-    background: rgba(255,255,255,0.04);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    font-size: 0.75rem;
-    color: var(--color-text-muted);
-  }
-
-  .tools-search-dropdown li .tools-quick-icon img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-  }
-
-  .tools-search-dropdown li .tools-quick-info {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    overflow: hidden;
-  }
-
-  .tools-search-dropdown li .tools-quick-info .tools-quick-name {
-    font-weight: 600;
-    font-size: 0.9rem;
+  .tools-search-status strong {
     color: var(--color-text);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .tools-search-dropdown li .tools-quick-info .tools-quick-desc {
-    font-size: 0.78rem;
-    color: var(--color-text-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .tools-search-footer {
-    padding: 0.4rem 1rem;
-    border-top: 1px solid var(--color-border);
-    font-size: 0.78rem;
-    color: var(--color-text-muted);
-    text-align: right;
-    background: var(--color-bg-tertiary);
   }
 
   /* ===== 分类区域 ===== */
@@ -443,15 +381,6 @@ const toolsJson = JSON.stringify(allTools).replace(/<\//g, '<\\/');
     background: rgba(255, 255, 255, 0.04);
   }
 
-  :global([data-theme="dark"]) .tools-search-dropdown {
-    background: rgba(24, 36, 54, 0.95);
-    border-color: rgba(147, 161, 188, 0.16);
-  }
-
-  :global([data-theme="dark"]) .tools-search-dropdown li:hover {
-    background: rgba(87, 166, 255, 0.1);
-  }
-
   /* ===== 空状态 ===== */
   .empty-state {
     padding: 2rem;
@@ -509,20 +438,17 @@ const toolsJson = JSON.stringify(allTools).replace(/<\//g, '<\\/');
     .tools-search-input {
       padding: 0.6rem 1rem;
       font-size: 0.88rem;
+      min-width: 120px;
     }
 
-    .tools-search-dropdown {
-      left: 0.8rem;
-      right: 0.8rem;
-      max-height: 240px;
+    .tools-search-btn {
+      padding: 0.6rem 1.2rem;
+      font-size: 0.88rem;
     }
 
-    .tools-search-dropdown li {
-      padding: 0.5rem 0.8rem;
-    }
-
-    .tools-search-dropdown li .tools-quick-info .tools-quick-name {
-      font-size: 0.84rem;
+    .tools-search-clear-btn {
+      padding: 0.6rem 1rem;
+      font-size: 0.82rem;
     }
   }
 
@@ -533,131 +459,3 @@ const toolsJson = JSON.stringify(allTools).replace(/<\//g, '<\\/');
     }
   }
 </style>
-
-<script>
-  // 注意：这里使用 JSON.parse 安全解析数据，避免 XSS 和语法错误
-  const allTools = JSON.parse(`<%- toolsJson %>`);
-
-  const searchInput = document.getElementById('toolSearchInput');
-  const clearBtn = document.getElementById('toolSearchClear');
-  const dropdown = document.getElementById('toolSearchDropdown');
-  const resultsList = document.getElementById('toolSearchResults');
-  const countSpan = document.getElementById('toolSearchCount');
-  const statusEl = document.getElementById('toolSearchStatus');
-
-  let selectedIndex = -1;
-
-  function renderDropdown(query) {
-    const q = query.trim().toLowerCase();
-    let filtered = [];
-    if (q) {
-      filtered = allTools.filter(tool =>
-        tool.name.toLowerCase().includes(q) ||
-        (tool.description && tool.description.toLowerCase().includes(q))
-      );
-    }
-
-    if (filtered.length === 0 || !q) {
-      dropdown.style.display = 'none';
-      statusEl.className = 'tools-search-status';
-      statusEl.textContent = '';
-      return;
-    }
-
-    resultsList.innerHTML = filtered.map(tool => `
-      <li data-url="${tool.url}">
-        <div class="tools-quick-icon">
-          ${tool.icon ? `<img src="${tool.icon}" alt="" />` : `<span>${tool.name.charAt(0)}</span>`}
-        </div>
-        <div class="tools-quick-info">
-          <span class="tools-quick-name">${tool.name}</span>
-          <span class="tools-quick-desc">${tool.description || ''}</span>
-        </div>
-      </li>
-    `).join('');
-
-    countSpan.textContent = filtered.length;
-    dropdown.style.display = 'flex';
-
-    // 点击跳转
-    resultsList.querySelectorAll('li').forEach(li => {
-      li.addEventListener('click', () => {
-        window.open(li.dataset.url, '_blank');
-        dropdown.style.display = 'none';
-        searchInput.value = '';
-        clearBtn.style.display = 'none';
-        statusEl.className = 'tools-search-status';
-        statusEl.textContent = '';
-        selectedIndex = -1;
-      });
-    });
-
-    selectedIndex = -1;
-  }
-
-  searchInput.addEventListener('input', () => {
-    const val = searchInput.value;
-    clearBtn.style.display = val ? 'inline-block' : 'none';
-    renderDropdown(val);
-  });
-
-  searchInput.addEventListener('blur', () => {
-    setTimeout(() => {
-      dropdown.style.display = 'none';
-    }, 200);
-  });
-
-  searchInput.addEventListener('focus', () => {
-    if (searchInput.value.trim()) renderDropdown(searchInput.value);
-  });
-
-  clearBtn.addEventListener('click', () => {
-    searchInput.value = '';
-    clearBtn.style.display = 'none';
-    dropdown.style.display = 'none';
-    statusEl.className = 'tools-search-status';
-    statusEl.textContent = '';
-    searchInput.focus();
-    selectedIndex = -1;
-  });
-
-  // 键盘导航
-  searchInput.addEventListener('keydown', (e) => {
-    const items = resultsList.querySelectorAll('li');
-    if (items.length === 0) return;
-
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
-      updateSelected(items);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      selectedIndex = Math.max(selectedIndex - 1, -1);
-      updateSelected(items);
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (selectedIndex >= 0 && items[selectedIndex]) {
-        window.open(items[selectedIndex].dataset.url, '_blank');
-        dropdown.style.display = 'none';
-        searchInput.value = '';
-        clearBtn.style.display = 'none';
-        statusEl.className = 'tools-search-status';
-        statusEl.textContent = '';
-        selectedIndex = -1;
-      }
-    }
-  });
-
-  function updateSelected(items) {
-    items.forEach((item, index) => {
-      if (index === selectedIndex) {
-        item.style.background = 'rgba(10,132,255,0.12)';
-        item.scrollIntoView({ block: 'nearest' });
-      } else {
-        item.style.background = '';
-      }
-    });
-  }
-
-  dropdown.style.display = 'none';
-</script>
