@@ -1,0 +1,203 @@
+---
+import { env } from "cloudflare:workers";
+import Base from "@/layouts/Base.astro";
+
+// 工具数据（你可以在这里增删改）
+const tools = [
+  {
+    name: "Cloudflare Dashboard",
+    description: "管理域名、CDN、R2 存储等",
+    url: "https://dash.cloudflare.com",
+    icon: "https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/cloudflare.svg",
+  },
+  {
+    name: "GitHub",
+    description: "代码托管与协作",
+    url: "https://github.com",
+    icon: "https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/github.svg",
+  },
+  {
+    name: "Cloudinary",
+    description: "图片存储与优化",
+    url: "https://cloudinary.com",
+    icon: "https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/cloudinary.svg",
+  },
+  {
+    name: "Vercel",
+    description: "前端部署平台",
+    url: "https://vercel.com",
+    icon: "https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/vercel.svg",
+  },
+  {
+    name: "Supabase",
+    description: "开源数据库即服务",
+    url: "https://supabase.com",
+    icon: "https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/supabase.svg",
+  },
+  {
+    name: "Drizzle Studio",
+    description: "数据库管理界面",
+    url: "https://local.drizzle.studio",
+    icon: "https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/drizzle.svg",
+  },
+];
+---
+
+<Base title="工具箱" description="日常开发与写作常用的工具集合">
+  <section class="tools-hero glass-panel">
+    <span class="section-kicker">工具箱</span>
+    <h1 class="page-title">🧰 工具箱</h1>
+    <p class="page-intro">日常开发与写作中常用的工具，点击卡片直达官网。</p>
+  </section>
+
+  <section class="tools-grid-section glass-panel">
+    <div class="tools-grid">
+      {
+        tools.map((tool) => (
+          <a
+            href={tool.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="tool-card"
+          >
+            <div class="tool-card-icon">
+              <img src={tool.icon} alt={tool.name} loading="lazy" />
+            </div>
+            <div class="tool-card-body">
+              <h2 class="tool-card-name">{tool.name}</h2>
+              <p class="tool-card-desc">{tool.description}</p>
+            </div>
+          </a>
+        ))
+      }
+    </div>
+  </section>
+</Base>
+
+<style>
+  .tools-hero {
+    --glass-panel-opacity: calc(var(--hero-card-opacity, 14) / 100);
+    --glass-panel-blur: var(--hero-card-blur, 18px);
+    display: grid;
+    gap: 1rem;
+    padding: clamp(1.5rem, 1rem + 2vw, 2.5rem);
+  }
+
+  .tools-grid-section {
+    --glass-panel-opacity: calc(var(--hero-card-opacity, 14) / 100);
+    --glass-panel-blur: var(--hero-card-blur, 18px);
+    padding: 1.2rem;
+    display: grid;
+  }
+
+  .tools-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+  }
+
+  .tool-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 1.5rem 1rem;
+    border-radius: var(--radius-inner);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition:
+      transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+    text-decoration: none;
+    color: var(--color-text);
+  }
+
+  .tool-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-soft);
+    border-color: rgba(10, 132, 255, 0.22);
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .tool-card-icon {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-bg-tertiary);
+    border-radius: 9999px;
+    padding: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    flex-shrink: 0;
+  }
+
+  .tool-card-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+
+  .tool-card-body {
+    display: grid;
+    gap: 0.2rem;
+  }
+
+  .tool-card-name {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+    color: var(--color-text);
+    letter-spacing: -0.02em;
+  }
+
+  .tool-card-desc {
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  /* 深色主题适配 */
+  :global([data-theme="dark"]) .tool-card {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+
+  :global([data-theme="dark"]) .tool-card:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(87, 166, 255, 0.24);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :global(:root:not([data-theme="light"])) .tool-card {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.06);
+    }
+
+    :global(:root:not([data-theme="light"])) .tool-card:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(87, 166, 255, 0.24);
+    }
+  }
+
+  @media (max-width: 640px) {
+    .tools-grid {
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 0.8rem;
+    }
+
+    .tool-card {
+      padding: 1.2rem 0.8rem;
+    }
+
+    .tool-card-icon {
+      width: 40px;
+      height: 40px;
+      padding: 8px;
+    }
+  }
+</style>
