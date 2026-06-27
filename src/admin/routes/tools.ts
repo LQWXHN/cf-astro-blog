@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { and, asc, desc, eq, or, sql } from "drizzle-orm"; // 移除 ilike
+import { and, asc, desc, eq, or, sql } from "drizzle-orm";
 import { toolCategories, toolItems } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { escapeAttribute, escapeHtml } from "@/lib/security";
@@ -20,9 +20,8 @@ tools.get("/", async (c) => {
   try {
     const session = getAuthenticatedSession(c);
     const db = getDb(c.env.DB);
-    const search = c.req.query("q") || "";
 
-    // 获取所有分类及其工具数量
+    // 获取所有分类
     const categories = await db
       .select({
         id: toolCategories.id,
@@ -35,28 +34,18 @@ tools.get("/", async (c) => {
       .groupBy(toolCategories.id)
       .orderBy(asc(toolCategories.sortOrder), asc(toolCategories.name));
 
-    // 工具列表（支持搜索）- 使用 lower() 替代 ilike
-    let itemsQuery = db
+    // 获取所有工具（用于下拉框搜索）
+    const allTools = await db
       .select({
         id: toolItems.id,
         name: toolItems.name,
         description: toolItems.description,
+        url: toolItems.url,
+        icon: toolItems.icon,
         categoryName: toolCategories.name,
       })
       .from(toolItems)
-      .leftJoin(toolCategories, eq(toolItems.categoryId, toolCategories.id));
-
-    if (search) {
-      const pattern = `%${search}%`;
-      itemsQuery = itemsQuery.where(
-        or(
-          sql`lower(${toolItems.name}) LIKE ${pattern}`,
-          sql`lower(${toolItems.description}) LIKE ${pattern}`
-        )
-      );
-    }
-
-    const items = await itemsQuery
+      .leftJoin(toolCategories, eq(toolItems.categoryId, toolCategories.id))
       .orderBy(asc(toolCategories.name), asc(toolItems.sortOrder), asc(toolItems.name));
 
     // 构建分类表格
@@ -83,9 +72,9 @@ tools.get("/", async (c) => {
 
     // 构建工具表格
     const itemsHtml =
-      items.length === 0
-        ? `<tr><td colspan="4" class="empty-state">暂无工具${search ? `（关键词："${escapeHtml(search)}"）` : ""}，请添加。</td></tr>`
-        : items
+      allTools.length === 0
+        ? `<tr><td colspan="4" class="empty-state">暂无工具，请添加。</td></tr>`
+        : allTools
             .map(
               (item) => `
                 <tr>
@@ -104,12 +93,38 @@ tools.get("/", async (c) => {
             )
             .join("");
 
+    // 将工具数据序列化到页面中
+    const toolsJson = JSON.stringify(allTools);
+
     const content = `
-      <h1>工具箱管理</h1>
-      <div class="page-actions">
-        <a href="/api/admin/tools/categories/new" class="btn btn-primary">新建分类</a>
-        <a href="/api/admin/tools/items/new" class="btn">新建工具</a>
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+        <h1 style="margin: 0;">工具箱管理</h1>
+        <div class="page-actions" style="margin: 0;">
+          <a href="/api/admin/tools/categories/new" class="btn btn-primary">新建分类</a>
+          <a href="/api/admin/tools/items/new" class="btn">新建工具</a>
+        </div>
       </div>
+
+      <!-- ===== 快速跳转搜索框（实时下拉框） ===== -->
+      <div class="tools-quick-search">
+        <div class="tools-quick-search-box">
+          <input
+            type="text"
+            id="toolsQuickSearchInput"
+            placeholder="快速跳转：输入关键词进行搜索..."
+            class="tools-quick-search-input"
+            autocomplete="off"
+          />
+          <span id="toolsQuickSearchClear" class="tools-quick-search-clear" style="display: none;">✕</span>
+        </div>
+        <div class="tools-quick-dropdown" id="toolsQuickDropdown" style="display:none;">
+          <ul id="toolsQuickResults"></ul>
+          <div class="tools-quick-footer">
+            找到 <span id="toolsQuickCount">0</span> 个工具
+          </div>
+        </div>
+      </div>
+
       <div class="table-card">
         <table class="data-table">
           <thead>
@@ -126,15 +141,6 @@ tools.get("/", async (c) => {
       </div>
 
       <h2>所有工具</h2>
-      <!-- 搜索框 -->
-      <div class="table-actions" style="margin-bottom: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
-        <form method="get" action="/api/admin/tools" style="display: flex; gap: 0.5rem; align-items: center; flex: 1; min-width: 200px;">
-          <input type="text" name="q" placeholder="搜索工具名称或描述..." value="${escapeAttribute(search)}" class="form-input" style="flex: 1; min-width: 150px;" />
-          <button type="submit" class="btn btn-sm">搜索</button>
-          ${search ? `<a href="/api/admin/tools" class="btn btn-sm">清除</a>` : ""}
-        </form>
-        ${search ? `<span class="form-help" style="margin-top: 0;">共找到 ${items.length} 个匹配的工具</span>` : ""}
-      </div>
       <div class="table-card">
         <table class="data-table">
           <thead>
@@ -150,12 +156,129 @@ tools.get("/", async (c) => {
           </tbody>
         </table>
       </div>
+
+      <script>
+        (function() {
+          const allTools = ${toolsJson};
+          const searchInput = document.getElementById('toolsQuickSearchInput');
+          const clearBtn = document.getElementById('toolsQuickSearchClear');
+          const dropdown = document.getElementById('toolsQuickDropdown');
+          const resultsList = document.getElementById('toolsQuickResults');
+          const countSpan = document.getElementById('toolsQuickCount');
+
+          function renderDropdown(query) {
+            const q = query.trim().toLowerCase();
+            let filtered = [];
+            if (q) {
+              filtered = allTools.filter(tool =>
+                tool.name.toLowerCase().includes(q) ||
+                (tool.description && tool.description.toLowerCase().includes(q))
+              );
+            }
+
+            if (filtered.length === 0 || !q) {
+              dropdown.style.display = 'none';
+              return;
+            }
+
+            resultsList.innerHTML = filtered.map(tool => {
+              const iconHtml = tool.icon
+                ? `<img src="${escapeHtml(tool.icon)}" alt="" />`
+                : `<span class="tools-quick-icon-placeholder">${escapeHtml(tool.name.charAt(0))}</span>`;
+              return \`
+                <li data-url="\${escapeHtml(tool.url)}">
+                  <div class="tools-quick-icon">\${iconHtml}</div>
+                  <div class="tools-quick-info">
+                    <span class="tools-quick-name">\${escapeHtml(tool.name)}</span>
+                    <span class="tools-quick-desc">\${escapeHtml(tool.description || '')}</span>
+                  </div>
+                </li>
+              \`;
+            }).join('');
+
+            countSpan.textContent = filtered.length;
+            dropdown.style.display = 'flex';
+
+            // 点击跳转
+            resultsList.querySelectorAll('li').forEach(li => {
+              li.addEventListener('click', () => {
+                window.open(li.dataset.url, '_blank');
+                dropdown.style.display = 'none';
+                searchInput.value = '';
+                clearBtn.style.display = 'none';
+              });
+            });
+          }
+
+          searchInput.addEventListener('input', () => {
+            const val = searchInput.value;
+            clearBtn.style.display = val ? 'inline-block' : 'none';
+            renderDropdown(val);
+          });
+
+          searchInput.addEventListener('blur', () => {
+            setTimeout(() => { dropdown.style.display = 'none'; }, 200);
+          });
+
+          searchInput.addEventListener('focus', () => {
+            if (searchInput.value.trim()) renderDropdown(searchInput.value);
+          });
+
+          clearBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            clearBtn.style.display = 'none';
+            dropdown.style.display = 'none';
+            searchInput.focus();
+          });
+
+          // 键盘导航
+          let selectedIndex = -1;
+          searchInput.addEventListener('keydown', (e) => {
+            const items = resultsList.querySelectorAll('li');
+            if (items.length === 0) return;
+
+            if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+              updateSelected(items);
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              selectedIndex = Math.max(selectedIndex - 1, -1);
+              updateSelected(items);
+            } else if (e.key === 'Enter') {
+              e.preventDefault();
+              if (selectedIndex >= 0 && items[selectedIndex]) {
+                window.open(items[selectedIndex].dataset.url, '_blank');
+                dropdown.style.display = 'none';
+                searchInput.value = '';
+                clearBtn.style.display = 'none';
+                selectedIndex = -1;
+              }
+            }
+          });
+
+          function updateSelected(items) {
+            items.forEach((item, index) => {
+              item.style.background = index === selectedIndex ? 'rgba(10,132,255,0.12)' : '';
+              if (index === selectedIndex) item.scrollIntoView({ block: 'nearest' });
+            });
+          }
+
+          // 转义函数（用于内联脚本）
+          function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          }
+
+          dropdown.style.display = 'none';
+        })();
+      </script>
     `;
 
     return c.html(adminLayout("工具箱管理", content, { csrfToken: session.csrfToken }));
   } catch (error: any) {
     console.error("Tools page error:", error);
-    return c.text(`❌ 错误: ${error.message}\n\n堆栈:\n${error.stack}`, 500);
+    return c.text(`错误: ${error.message}\n\n堆栈:\n${error.stack}`, 500);
   }
 });
 
@@ -183,7 +306,7 @@ tools.get("/categories/new", async (c) => {
     `;
     return c.html(adminLayout("新建分类", content, { csrfToken: session.csrfToken }));
   } catch (error: any) {
-    return c.text(`❌ 错误: ${error.message}`, 500);
+    return c.text(`错误: ${error.message}`, 500);
   }
 });
 
@@ -203,7 +326,7 @@ tools.post("/categories", async (c) => {
     await db.insert(toolCategories).values({ name, sortOrder });
     return c.redirect("/api/admin/tools");
   } catch (error: any) {
-    return c.text(`❌ 错误: ${error.message}`, 500);
+    return c.text(`错误: ${error.message}`, 500);
   }
 });
 
@@ -238,7 +361,7 @@ tools.get("/categories/:id/edit", async (c) => {
     `;
     return c.html(adminLayout("编辑分类", content, { csrfToken: session.csrfToken }));
   } catch (error: any) {
-    return c.text(`❌ 错误: ${error.message}`, 500);
+    return c.text(`错误: ${error.message}`, 500);
   }
 });
 
@@ -260,7 +383,7 @@ tools.post("/categories/:id", async (c) => {
       .where(eq(toolCategories.id, id));
     return c.redirect("/api/admin/tools");
   } catch (error: any) {
-    return c.text(`❌ 错误: ${error.message}`, 500);
+    return c.text(`错误: ${error.message}`, 500);
   }
 });
 
@@ -276,7 +399,7 @@ tools.post("/categories/:id/delete", async (c) => {
     await db.delete(toolCategories).where(eq(toolCategories.id, id));
     return c.redirect("/api/admin/tools");
   } catch (error: any) {
-    return c.text(`❌ 错误: ${error.message}`, 500);
+    return c.text(`错误: ${error.message}`, 500);
   }
 });
 
@@ -334,7 +457,7 @@ tools.get("/items/new", async (c) => {
     `;
     return c.html(adminLayout("新建工具", content, { csrfToken: session.csrfToken }));
   } catch (error: any) {
-    return c.text(`❌ 错误: ${error.message}`, 500);
+    return c.text(`错误: ${error.message}`, 500);
   }
 });
 
@@ -365,7 +488,7 @@ tools.post("/items", async (c) => {
     });
     return c.redirect("/api/admin/tools");
   } catch (error: any) {
-    return c.text(`❌ 错误: ${error.message}`, 500);
+    return c.text(`错误: ${error.message}`, 500);
   }
 });
 
@@ -428,7 +551,7 @@ tools.get("/items/:id/edit", async (c) => {
     `;
     return c.html(adminLayout("编辑工具", content, { csrfToken: session.csrfToken }));
   } catch (error: any) {
-    return c.text(`❌ 错误: ${error.message}`, 500);
+    return c.text(`错误: ${error.message}`, 500);
   }
 });
 
@@ -464,7 +587,7 @@ tools.post("/items/:id", async (c) => {
       .where(eq(toolItems.id, id));
     return c.redirect("/api/admin/tools");
   } catch (error: any) {
-    return c.text(`❌ 错误: ${error.message}`, 500);
+    return c.text(`错误: ${error.message}`, 500);
   }
 });
 
@@ -480,7 +603,7 @@ tools.post("/items/:id/delete", async (c) => {
     await db.delete(toolItems).where(eq(toolItems.id, id));
     return c.redirect("/api/admin/tools");
   } catch (error: any) {
-    return c.text(`❌ 错误: ${error.message}`, 500);
+    return c.text(`错误: ${error.message}`, 500);
   }
 });
 

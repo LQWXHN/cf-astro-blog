@@ -35,24 +35,24 @@ const categorized = categories.map((cat) => ({
   items: allTools.filter((tool) => tool.categoryId === cat.id),
 }));
 
-// 将数据序列化到 JS 中
+// 序列化工具数据到 JS
 const toolsJson = JSON.stringify(allTools);
 ---
 
-<Base title="工具箱" description="常用的工具，点击直达">
+<Base title="百宝箱" description="常用的工具，点击直达">
   <section class="tools-hero glass-panel">
-    <span class="section-kicker">🧰 工具箱</span>
+    <span class="section-kicker">工具箱</span>
     <h1 class="page-title">工具箱</h1>
     <p class="page-intro">常用的工具，点击直达</p>
   </section>
 
-  <!-- ===== 搜索框 ===== -->
+  <!-- ===== 搜索框（实时下拉框） ===== -->
   <section class="tools-search glass-panel">
     <div class="tools-search-box">
       <input
         type="text"
         id="toolSearchInput"
-        placeholder="搜索工具名称或描述..."
+        placeholder="输入关键词进行搜索..."
         class="tools-search-input"
         autocomplete="off"
       />
@@ -229,34 +229,39 @@ const toolsJson = JSON.stringify(allTools);
     transition: background 0.15s;
   }
 
-  .tools-search-dropdown li:hover,
-  .tools-search-dropdown li:focus {
+  .tools-search-dropdown li:hover {
     background: rgba(10, 132, 255, 0.08);
   }
 
-  .tools-search-dropdown li .icon {
+  .tools-search-dropdown li .tools-quick-icon {
     width: 28px;
     height: 28px;
     flex-shrink: 0;
     border-radius: 6px;
     overflow: hidden;
     background: rgba(255,255,255,0.04);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
   }
 
-  .tools-search-dropdown li .icon img {
+  .tools-search-dropdown li .tools-quick-icon img {
     width: 100%;
     height: 100%;
     object-fit: contain;
   }
 
-  .tools-search-dropdown li .info {
+  .tools-search-dropdown li .tools-quick-info {
     display: flex;
     flex-direction: column;
     flex: 1;
     overflow: hidden;
   }
 
-  .tools-search-dropdown li .info .name {
+  .tools-search-dropdown li .tools-quick-info .tools-quick-name {
     font-weight: 600;
     font-size: 0.9rem;
     color: var(--color-text);
@@ -265,7 +270,7 @@ const toolsJson = JSON.stringify(allTools);
     text-overflow: ellipsis;
   }
 
-  .tools-search-dropdown li .info .desc {
+  .tools-search-dropdown li .tools-quick-info .tools-quick-desc {
     font-size: 0.78rem;
     color: var(--color-text-muted);
     white-space: nowrap;
@@ -340,11 +345,7 @@ const toolsJson = JSON.stringify(allTools);
     border-radius: var(--radius-inner);
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.06);
-    transition:
-      transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
-      box-shadow 0.3s cubic-bezier(0.22, 1, 0.36, 1),
-      border-color 0.3s cubic-bezier(0.22, 1, 0.36, 1),
-      background-color 0.3s ease;
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.3s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.3s ease;
     text-decoration: none;
     color: var(--color-text);
     min-height: 140px;
@@ -520,7 +521,7 @@ const toolsJson = JSON.stringify(allTools);
       padding: 0.5rem 0.8rem;
     }
 
-    .tools-search-dropdown li .info .name {
+    .tools-search-dropdown li .tools-quick-info .tools-quick-name {
       font-size: 0.84rem;
     }
   }
@@ -535,8 +536,7 @@ const toolsJson = JSON.stringify(allTools);
 
 <script>
   document.addEventListener('DOMContentLoaded', () => {
-    // 从页面嵌入的数据
-    const allTools = JSON.parse(`<%- JSON.stringify(allTools) %>`);
+    const allTools = ${toolsJson};
 
     const searchInput = document.getElementById('toolSearchInput');
     const clearBtn = document.getElementById('toolSearchClear');
@@ -545,7 +545,7 @@ const toolsJson = JSON.stringify(allTools);
     const countSpan = document.getElementById('toolSearchCount');
     const statusEl = document.getElementById('toolSearchStatus');
 
-    let currentTools = allTools;
+    let selectedIndex = -1;
 
     function renderDropdown(query) {
       const q = query.trim().toLowerCase();
@@ -564,15 +564,14 @@ const toolsJson = JSON.stringify(allTools);
         return;
       }
 
-      // 渲染列表
       resultsList.innerHTML = filtered.map(tool => `
         <li data-url="${tool.url}">
-          <div class="icon">
-            ${tool.icon ? `<img src="${tool.icon}" alt="" />` : ''}
+          <div class="tools-quick-icon">
+            ${tool.icon ? `<img src="${tool.icon}" alt="" />` : `<span>${tool.name.charAt(0)}</span>`}
           </div>
-          <div class="info">
-            <span class="name">${tool.name}</span>
-            <span class="desc">${tool.description || ''}</span>
+          <div class="tools-quick-info">
+            <span class="tools-quick-name">${tool.name}</span>
+            <span class="tools-quick-desc">${tool.description || ''}</span>
           </div>
         </li>
       `).join('');
@@ -580,7 +579,7 @@ const toolsJson = JSON.stringify(allTools);
       countSpan.textContent = filtered.length;
       dropdown.style.display = 'flex';
 
-      // 点击下拉项跳转
+      // 点击跳转
       resultsList.querySelectorAll('li').forEach(li => {
         li.addEventListener('click', () => {
           window.open(li.dataset.url, '_blank');
@@ -589,8 +588,11 @@ const toolsJson = JSON.stringify(allTools);
           clearBtn.style.display = 'none';
           statusEl.className = 'tools-search-status';
           statusEl.textContent = '';
+          selectedIndex = -1;
         });
       });
+
+      selectedIndex = -1;
     }
 
     searchInput.addEventListener('input', () => {
@@ -600,17 +602,13 @@ const toolsJson = JSON.stringify(allTools);
     });
 
     searchInput.addEventListener('blur', () => {
-      // 延迟隐藏下拉框，让点击事件先触发
       setTimeout(() => {
         dropdown.style.display = 'none';
       }, 200);
     });
 
     searchInput.addEventListener('focus', () => {
-      // 如果输入框有内容，重新渲染
-      if (searchInput.value.trim()) {
-        renderDropdown(searchInput.value);
-      }
+      if (searchInput.value.trim()) renderDropdown(searchInput.value);
     });
 
     clearBtn.addEventListener('click', () => {
@@ -620,10 +618,10 @@ const toolsJson = JSON.stringify(allTools);
       statusEl.className = 'tools-search-status';
       statusEl.textContent = '';
       searchInput.focus();
+      selectedIndex = -1;
     });
 
-    // 键盘上下导航
-    let selectedIndex = -1;
+    // 键盘导航
     searchInput.addEventListener('keydown', (e) => {
       const items = resultsList.querySelectorAll('li');
       if (items.length === 0) return;
@@ -661,7 +659,6 @@ const toolsJson = JSON.stringify(allTools);
       });
     }
 
-    // 初始隐藏下拉框
     dropdown.style.display = 'none';
   });
 </script>
