@@ -22,7 +22,7 @@ export interface CommentConfig {
 
 export const siteConfig: SiteConfig = {
 	name: "SengokuCola 的主页",
-	url: "https://blog.nibutupaopao.top",
+	url: "https://home.nibutupaopao.top",
 	description: "SengokuCola 的主页",
 	author: "SengokuCola",
 	language: "zh-CN",

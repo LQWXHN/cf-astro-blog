@@ -22,6 +22,13 @@
 			"migrations_dir": "drizzle"
 		}
 	],
+    
+	"r2_buckets": [
+        {
+            "binding": "MEDIA_BUCKET",
+            "bucket_name": "blog-media"
+        }
+    ],
 
 	"kv_namespaces": [
 		{
@@ -32,9 +39,9 @@
 
 	"vars": {
 		"SITE_NAME": "My Blog",
-		"SITE_URL": "https://blog.nibutupaopao.top",
+		"SITE_URL": "https://home.nibutupaopao.top",
 		"ADMIN_GITHUB_LOGIN": "LQWXHN",
-		"GITHUB_OAUTH_REDIRECT_URI": "https://blog.nibutupaopao.top/api/auth/github/callback",
+		"GITHUB_OAUTH_REDIRECT_URI": "https://home.nibutupaopao.top/api/auth/github/callback",
 		"GITHUB_OAUTH_CLIENT_ID": "Ov23liclictuT7qALMr7",
 		"AUTO_DEPLOY_GITHUB_EVENT_TYPE": "rebuild-search-index",
 		"CLOUDINARY_CLOUD_NAME": "dkid6obc",
