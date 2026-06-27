@@ -7,7 +7,7 @@ import { getDb } from "@/lib/db";
 
 // 获取所有分类及其工具
 const db = getDb(env.DB);
-const categoriesWithItems = await db
+const categories = await db
   .select({
     id: toolCategories.id,
     name: toolCategories.name,
@@ -30,7 +30,7 @@ const allTools = await db
   .orderBy(asc(toolItems.categoryId), asc(toolItems.sortOrder), asc(toolItems.name));
 
 // 按分类分组
-const categorized = categoriesWithItems.map((cat) => ({
+const categorized = categories.map((cat) => ({
   ...cat,
   items: allTools.filter((tool) => tool.categoryId === cat.id),
 }));
@@ -38,7 +38,7 @@ const categorized = categoriesWithItems.map((cat) => ({
 
 <Base title="工具箱" description="常用的工具，点击直达">
   <section class="tools-hero glass-panel">
-    <span class="section-kicker">工具箱</span>
+    <span class="section-kicker">🧰 工具箱</span>
     <h1 class="page-title">工具箱</h1>
     <p class="page-intro">常用的工具，点击直达</p>
   </section>
@@ -48,6 +48,7 @@ const categorized = categoriesWithItems.map((cat) => ({
       <section class="tools-category-section glass-panel">
         <div class="tools-category-head">
           <span class="tools-category-kicker">{category.name}</span>
+          <span class="tools-category-count">{category.items.length} 个工具</span>
         </div>
         <div class="tools-grid">
           {
@@ -57,6 +58,7 @@ const categorized = categoriesWithItems.map((cat) => ({
                 target="_blank"
                 rel="noopener noreferrer"
                 class="tool-card"
+                title={tool.name}
               >
                 <div class="tool-card-icon">
                   {tool.icon ? (
@@ -76,23 +78,246 @@ const categorized = categoriesWithItems.map((cat) => ({
       </section>
     ))
   }
+
+  {
+    categorized.length === 0 && (
+      <section class="tools-category-section glass-panel">
+        <div class="tools-category-head">
+          <span class="tools-category-kicker">📭 暂无工具</span>
+        </div>
+        <div class="empty-state">请前往后台添加工具分类和工具条目。</div>
+      </section>
+    )
+  }
 </Base>
 
 <style>
-  /* ... 和之前相同的样式，你可以复用之前的 CSS ... */
-  .tools-hero { /* ... */ }
-  .tools-category-section { /* ... */ }
-  .tools-grid { /* ... */ }
-  .tool-card { /* ... */ }
-  /* 增加图标占位符样式 */
-  .tool-icon-placeholder {
-    width: 100%;
-    height: 100%;
+  /* ===== Hero 区域 ===== */
+  .tools-hero {
+    --glass-panel-opacity: calc(var(--hero-card-opacity, 14) / 100);
+    --glass-panel-blur: var(--hero-card-blur, 18px);
+    display: grid;
+    gap: 0.8rem;
+    padding: clamp(1.8rem, 1.5rem + 2vw, 3rem);
+    margin-bottom: 1.5rem;
+  }
+
+  /* ===== 分类区域 ===== */
+  .tools-category-section {
+    --glass-panel-opacity: calc(var(--hero-card-opacity, 14) / 100);
+    --glass-panel-blur: var(--hero-card-blur, 18px);
+    padding: 1.5rem 1.5rem 1.2rem;
+    margin-bottom: 1.5rem;
+    display: grid;
+    gap: 1rem;
+  }
+
+  .tools-category-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .tools-category-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0.9rem;
+    border-radius: var(--radius-pill);
+    background: rgba(10, 132, 255, 0.08);
+    border: 1px solid rgba(10, 132, 255, 0.12);
+    color: var(--color-accent-hover);
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+
+  .tools-category-count {
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    background: rgba(255, 255, 255, 0.04);
+    padding: 0.2rem 0.7rem;
+    border-radius: var(--radius-pill);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  /* ===== 工具卡片网格 ===== */
+  .tools-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 1.2rem;
+  }
+
+  /* ===== 卡片样式 ===== */
+  .tool-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 1.5rem 0.8rem 1.2rem;
+    border-radius: var(--radius-inner);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    transition:
+      transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+      background-color 0.3s ease;
+    text-decoration: none;
+    color: var(--color-text);
+    min-height: 140px;
+    backdrop-filter: blur(2px);
+  }
+
+  .tool-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 16px 32px -16px rgba(0, 0, 0, 0.18);
+    border-color: rgba(10, 132, 255, 0.25);
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .tool-card-icon {
+    width: 52px;
+    height: 52px;
+    margin-bottom: 0.7rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-weight: 700;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 9999px;
+    padding: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    flex-shrink: 0;
+    transition: transform 0.3s ease, background-color 0.3s ease;
+  }
+
+  .tool-card:hover .tool-card-icon {
+    background: rgba(10, 132, 255, 0.06);
+    border-color: rgba(10, 132, 255, 0.12);
+    transform: scale(1.04);
+  }
+
+  .tool-card-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+
+  .tool-icon-placeholder {
     font-size: 1.2rem;
+    font-weight: 700;
     color: var(--color-text-muted);
+  }
+
+  .tool-card-body {
+    display: grid;
+    gap: 0.15rem;
+    width: 100%;
+  }
+
+  .tool-card-name {
+    font-size: 0.92rem;
+    font-weight: 600;
+    margin: 0;
+    color: var(--color-text);
+    letter-spacing: -0.02em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tool-card-desc {
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    margin: 0;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  /* ===== 深色主题适配 ===== */
+  :global([data-theme="dark"]) .tool-card {
+    background: rgba(255, 255, 255, 0.02);
+    border-color: rgba(255, 255, 255, 0.04);
+  }
+
+  :global([data-theme="dark"]) .tool-card:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(87, 166, 255, 0.2);
+  }
+
+  :global([data-theme="dark"]) .tools-category-kicker {
+    background: rgba(87, 166, 255, 0.08);
+    border-color: rgba(87, 166, 255, 0.12);
+    color: var(--color-accent);
+  }
+
+  :global([data-theme="dark"]) .tool-card-icon {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  /* ===== 空状态 ===== */
+  .empty-state {
+    padding: 2rem;
+    text-align: center;
+    color: var(--color-text-muted);
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: var(--radius-inner);
+    border: 1px dashed rgba(255, 255, 255, 0.08);
+    width: 100%;
+  }
+
+  /* ===== 响应式 ===== */
+  @media (max-width: 640px) {
+    .tools-grid {
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 0.8rem;
+    }
+
+    .tool-card {
+      padding: 1rem 0.6rem 0.8rem;
+      min-height: 120px;
+    }
+
+    .tool-card-icon {
+      width: 44px;
+      height: 44px;
+      padding: 8px;
+    }
+
+    .tool-card-name {
+      font-size: 0.82rem;
+    }
+
+    .tool-card-desc {
+      font-size: 0.72rem;
+      -webkit-line-clamp: 2;
+    }
+
+    .tools-category-section {
+      padding: 0.8rem 0.8rem 0.6rem;
+    }
+
+    .tools-category-kicker {
+      font-size: 0.78rem;
+    }
+
+    .tools-category-count {
+      font-size: 0.7rem;
+    }
+  }
+
+  @media (max-width: 420px) {
+    .tools-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.6rem;
+    }
   }
 </style>
