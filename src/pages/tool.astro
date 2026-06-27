@@ -34,6 +34,9 @@ const categorized = categories.map((cat) => ({
   ...cat,
   items: allTools.filter((tool) => tool.categoryId === cat.id),
 }));
+
+// 将数据序列化到 JS 中
+const toolsJson = JSON.stringify(allTools);
 ---
 
 <Base title="工具箱" description="常用的工具，点击直达">
@@ -54,6 +57,13 @@ const categorized = categories.map((cat) => ({
         autocomplete="off"
       />
       <span id="toolSearchClear" class="tools-search-clear" style="display: none;">✕</span>
+    </div>
+    <!-- 下拉框 -->
+    <div class="tools-search-dropdown" id="toolSearchDropdown" style="display:none;">
+      <ul id="toolSearchResults"></ul>
+      <div class="tools-search-footer">
+        找到 <span id="toolSearchCount">0</span> 个工具
+      </div>
     </div>
     <p id="toolSearchStatus" class="tools-search-status"></p>
   </section>
@@ -129,6 +139,7 @@ const categorized = categories.map((cat) => ({
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
+    position: relative;
   }
 
   .tools-search-box {
@@ -183,6 +194,94 @@ const categorized = categories.map((cat) => ({
     display: block;
   }
 
+  /* ===== 下拉框 ===== */
+  .tools-search-dropdown {
+    position: absolute;
+    top: calc(100% - 0.5rem);
+    left: 1.5rem;
+    right: 1.5rem;
+    background: var(--color-bg-secondary);
+    backdrop-filter: blur(18px) saturate(140%);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-strong);
+    z-index: 10;
+    max-height: 320px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .tools-search-dropdown ul {
+    list-style: none;
+    margin: 0;
+    padding: 0.4rem 0;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .tools-search-dropdown li {
+    padding: 0.6rem 1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    transition: background 0.15s;
+  }
+
+  .tools-search-dropdown li:hover,
+  .tools-search-dropdown li:focus {
+    background: rgba(10, 132, 255, 0.08);
+  }
+
+  .tools-search-dropdown li .icon {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    border-radius: 6px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.04);
+  }
+
+  .tools-search-dropdown li .icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .tools-search-dropdown li .info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .tools-search-dropdown li .info .name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--color-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .tools-search-dropdown li .info .desc {
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .tools-search-footer {
+    padding: 0.4rem 1rem;
+    border-top: 1px solid var(--color-border);
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    text-align: right;
+    background: var(--color-bg-tertiary);
+  }
+
   /* ===== 分类区域 ===== */
   .tools-category-section {
     --glass-panel-opacity: calc(var(--hero-card-opacity, 14) / 100);
@@ -232,7 +331,6 @@ const categorized = categories.map((cat) => ({
     gap: 1.2rem;
   }
 
-  /* ===== 卡片样式 ===== */
   .tool-card {
     display: flex;
     flex-direction: column;
@@ -344,6 +442,15 @@ const categorized = categories.map((cat) => ({
     background: rgba(255, 255, 255, 0.04);
   }
 
+  :global([data-theme="dark"]) .tools-search-dropdown {
+    background: rgba(24, 36, 54, 0.95);
+    border-color: rgba(147, 161, 188, 0.16);
+  }
+
+  :global([data-theme="dark"]) .tools-search-dropdown li:hover {
+    background: rgba(87, 166, 255, 0.1);
+  }
+
   /* ===== 空状态 ===== */
   .empty-state {
     padding: 2rem;
@@ -402,6 +509,20 @@ const categorized = categories.map((cat) => ({
       padding: 0.6rem 1rem;
       font-size: 0.88rem;
     }
+
+    .tools-search-dropdown {
+      left: 0.8rem;
+      right: 0.8rem;
+      max-height: 240px;
+    }
+
+    .tools-search-dropdown li {
+      padding: 0.5rem 0.8rem;
+    }
+
+    .tools-search-dropdown li .info .name {
+      font-size: 0.84rem;
+    }
   }
 
   @media (max-width: 420px) {
@@ -414,65 +535,133 @@ const categorized = categories.map((cat) => ({
 
 <script>
   document.addEventListener('DOMContentLoaded', () => {
+    // 从页面嵌入的数据
+    const allTools = JSON.parse(`<%- JSON.stringify(allTools) %>`);
+
     const searchInput = document.getElementById('toolSearchInput');
     const clearBtn = document.getElementById('toolSearchClear');
+    const dropdown = document.getElementById('toolSearchDropdown');
+    const resultsList = document.getElementById('toolSearchResults');
+    const countSpan = document.getElementById('toolSearchCount');
     const statusEl = document.getElementById('toolSearchStatus');
-    const cards = document.querySelectorAll('.tool-card');
-    const categorySections = document.querySelectorAll('.tools-category-section');
-    const categoryCounts = document.querySelectorAll('[data-category-count]');
 
-    function filterTools(query) {
+    let currentTools = allTools;
+
+    function renderDropdown(query) {
       const q = query.trim().toLowerCase();
-      let totalVisible = 0;
-
-      cards.forEach(card => {
-        const name = (card.getAttribute('data-name') || '').toLowerCase();
-        const desc = (card.getAttribute('data-desc') || '').toLowerCase();
-        const match = !q || name.includes(q) || desc.includes(q);
-        card.style.display = match ? '' : 'none';
-        if (match) totalVisible++;
-      });
-
-      // 处理分类显示和计数
-      categorySections.forEach(section => {
-        const sectionCards = section.querySelectorAll('.tool-card');
-        let visibleInSection = 0;
-        sectionCards.forEach(card => {
-          if (card.style.display !== 'none') visibleInSection++;
-        });
-        const countEl = section.querySelector('[data-category-count]');
-        if (countEl) {
-          countEl.textContent = `${visibleInSection} 个工具`;
-        }
-        section.style.display = visibleInSection === 0 ? 'none' : '';
-      });
-
-      // 更新状态信息
-      if (q && totalVisible === 0) {
-        statusEl.textContent = `没有找到包含 “${q}” 的工具`;
-        statusEl.className = 'tools-search-status is-active';
-      } else if (q) {
-        statusEl.textContent = `找到 ${totalVisible} 个工具`;
-        statusEl.className = 'tools-search-status is-active';
-      } else {
-        statusEl.textContent = '';
-        statusEl.className = 'tools-search-status';
+      let filtered = [];
+      if (q) {
+        filtered = allTools.filter(tool =>
+          tool.name.toLowerCase().includes(q) ||
+          (tool.description && tool.description.toLowerCase().includes(q))
+        );
       }
 
-      clearBtn.style.display = q ? 'inline-block' : 'none';
+      if (filtered.length === 0 || !q) {
+        dropdown.style.display = 'none';
+        statusEl.className = 'tools-search-status';
+        statusEl.textContent = '';
+        return;
+      }
+
+      // 渲染列表
+      resultsList.innerHTML = filtered.map(tool => `
+        <li data-url="${tool.url}">
+          <div class="icon">
+            ${tool.icon ? `<img src="${tool.icon}" alt="" />` : ''}
+          </div>
+          <div class="info">
+            <span class="name">${tool.name}</span>
+            <span class="desc">${tool.description || ''}</span>
+          </div>
+        </li>
+      `).join('');
+
+      countSpan.textContent = filtered.length;
+      dropdown.style.display = 'flex';
+
+      // 点击下拉项跳转
+      resultsList.querySelectorAll('li').forEach(li => {
+        li.addEventListener('click', () => {
+          window.open(li.dataset.url, '_blank');
+          dropdown.style.display = 'none';
+          searchInput.value = '';
+          clearBtn.style.display = 'none';
+          statusEl.className = 'tools-search-status';
+          statusEl.textContent = '';
+        });
+      });
     }
 
     searchInput.addEventListener('input', () => {
-      filterTools(searchInput.value);
+      const val = searchInput.value;
+      clearBtn.style.display = val ? 'inline-block' : 'none';
+      renderDropdown(val);
+    });
+
+    searchInput.addEventListener('blur', () => {
+      // 延迟隐藏下拉框，让点击事件先触发
+      setTimeout(() => {
+        dropdown.style.display = 'none';
+      }, 200);
+    });
+
+    searchInput.addEventListener('focus', () => {
+      // 如果输入框有内容，重新渲染
+      if (searchInput.value.trim()) {
+        renderDropdown(searchInput.value);
+      }
     });
 
     clearBtn.addEventListener('click', () => {
       searchInput.value = '';
-      filterTools('');
+      clearBtn.style.display = 'none';
+      dropdown.style.display = 'none';
+      statusEl.className = 'tools-search-status';
+      statusEl.textContent = '';
       searchInput.focus();
     });
 
-    // 初始状态
-    filterTools('');
+    // 键盘上下导航
+    let selectedIndex = -1;
+    searchInput.addEventListener('keydown', (e) => {
+      const items = resultsList.querySelectorAll('li');
+      if (items.length === 0) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+        updateSelected(items);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectedIndex = Math.max(selectedIndex - 1, -1);
+        updateSelected(items);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (selectedIndex >= 0 && items[selectedIndex]) {
+          window.open(items[selectedIndex].dataset.url, '_blank');
+          dropdown.style.display = 'none';
+          searchInput.value = '';
+          clearBtn.style.display = 'none';
+          statusEl.className = 'tools-search-status';
+          statusEl.textContent = '';
+          selectedIndex = -1;
+        }
+      }
+    });
+
+    function updateSelected(items) {
+      items.forEach((item, index) => {
+        if (index === selectedIndex) {
+          item.style.background = 'rgba(10,132,255,0.12)';
+          item.scrollIntoView({ block: 'nearest' });
+        } else {
+          item.style.background = '';
+        }
+      });
+    }
+
+    // 初始隐藏下拉框
+    dropdown.style.display = 'none';
   });
 </script>

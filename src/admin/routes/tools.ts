@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, or, sql } from "drizzle-orm"; // 移除 ilike
 import { toolCategories, toolItems } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { escapeAttribute, escapeHtml } from "@/lib/security";
@@ -35,7 +35,7 @@ tools.get("/", async (c) => {
       .groupBy(toolCategories.id)
       .orderBy(asc(toolCategories.sortOrder), asc(toolCategories.name));
 
-    // 工具列表（支持搜索）
+    // 工具列表（支持搜索）- 使用 lower() 替代 ilike
     let itemsQuery = db
       .select({
         id: toolItems.id,
@@ -47,10 +47,11 @@ tools.get("/", async (c) => {
       .leftJoin(toolCategories, eq(toolItems.categoryId, toolCategories.id));
 
     if (search) {
+      const pattern = `%${search}%`;
       itemsQuery = itemsQuery.where(
         or(
-          ilike(toolItems.name, `%${search}%`),
-          ilike(toolItems.description, `%${search}%`)
+          sql`lower(${toolItems.name}) LIKE ${pattern}`,
+          sql`lower(${toolItems.description}) LIKE ${pattern}`
         )
       );
     }
