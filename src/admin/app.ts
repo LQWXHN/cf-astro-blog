@@ -12,7 +12,7 @@ import { mentionsRoutes } from "./routes/mentions";
 import { postsRoutes } from "./routes/posts";
 import { publicAiRoutes } from "./routes/public-ai";
 import { publicAnalyticsRoutes } from "./routes/public-analytics";
-import { toolsRoutes } from "./routes/tools"; // 🆕 导入工具箱路由
+import { toolsRoutes } from "./routes/tools";
 import { webmentionRoutes } from "./routes/webmention";
 
 const app = new Hono<AdminAppEnv>();
@@ -63,7 +63,7 @@ function applySecurityHeaders(pathname: string, response: Response) {
 				"frame-ancestors 'none'",
 				"object-src 'none'",
 				"form-action 'self'",
-				"script-src 'self'",
+				"script-src 'self' https://static.cloudflareinsights.com", // 🆕 允许 Cloudflare Insights
 				"style-src 'self' 'unsafe-inline'",
 				"img-src 'self' data:",
 				"font-src 'self'",
@@ -89,7 +89,7 @@ app.route("/admin/friends", friendsRoutes);
 app.route("/admin/mentions", mentionsRoutes);
 app.route("/admin/media", mediaRoutes);
 app.route("/admin/analytics", analyticsRoutes);
-app.route("/admin/tools", toolsRoutes); // 🆕 注册工具箱路由
+app.route("/admin/tools", toolsRoutes);
 app.route("/friend-links", friendLinksRoutes);
 app.route("/webmention", webmentionRoutes);
 
