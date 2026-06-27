@@ -21,7 +21,6 @@ tools.get("/", async (c) => {
     const session = getAuthenticatedSession(c);
     const db = getDb(c.env.DB);
 
-    // 获取所有分类
     const categories = await db
       .select({
         id: toolCategories.id,
@@ -34,7 +33,6 @@ tools.get("/", async (c) => {
       .groupBy(toolCategories.id)
       .orderBy(asc(toolCategories.sortOrder), asc(toolCategories.name));
 
-    // 获取所有工具（用于下拉框搜索）
     const allTools = await db
       .select({
         id: toolItems.id,
@@ -48,7 +46,6 @@ tools.get("/", async (c) => {
       .leftJoin(toolCategories, eq(toolItems.categoryId, toolCategories.id))
       .orderBy(asc(toolCategories.name), asc(toolItems.sortOrder), asc(toolItems.name));
 
-    // 构建分类表格
     const categoriesHtml =
       categories.length === 0
         ? `<tr><td colspan="3" class="empty-state">暂无分类，请先创建。</td></tr>`
@@ -70,7 +67,6 @@ tools.get("/", async (c) => {
             )
             .join("");
 
-    // 构建工具表格
     const itemsHtml =
       allTools.length === 0
         ? `<tr><td colspan="4" class="empty-state">暂无工具，请添加。</td></tr>`
@@ -93,7 +89,7 @@ tools.get("/", async (c) => {
             )
             .join("");
 
-    // 将工具数据序列化到页面中
+    // 安全地序列化数据，避免 XSS 和语法错误
     const toolsJson = JSON.stringify(allTools);
 
     const content = `
@@ -159,21 +155,21 @@ tools.get("/", async (c) => {
 
       <script>
         (function() {
-          const allTools = ${toolsJson};
-          const searchInput = document.getElementById('toolsQuickSearchInput');
-          const clearBtn = document.getElementById('toolsQuickSearchClear');
-          const dropdown = document.getElementById('toolsQuickDropdown');
-          const resultsList = document.getElementById('toolsQuickResults');
-          const countSpan = document.getElementById('toolsQuickCount');
+          var allTools = ${toolsJson};  // 直接使用 JSON 数据
+          var searchInput = document.getElementById('toolsQuickSearchInput');
+          var clearBtn = document.getElementById('toolsQuickSearchClear');
+          var dropdown = document.getElementById('toolsQuickDropdown');
+          var resultsList = document.getElementById('toolsQuickResults');
+          var countSpan = document.getElementById('toolsQuickCount');
 
           function renderDropdown(query) {
-            const q = query.trim().toLowerCase();
-            let filtered = [];
+            var q = query.trim().toLowerCase();
+            var filtered = [];
             if (q) {
-              filtered = allTools.filter(tool =>
-                tool.name.toLowerCase().includes(q) ||
-                (tool.description && tool.description.toLowerCase().includes(q))
-              );
+              filtered = allTools.filter(function(tool) {
+                return (tool.name && tool.name.toLowerCase().indexOf(q) !== -1) ||
+                       (tool.description && tool.description.toLowerCase().indexOf(q) !== -1);
+              });
             }
 
             if (filtered.length === 0 || !q) {
@@ -181,60 +177,61 @@ tools.get("/", async (c) => {
               return;
             }
 
-            resultsList.innerHTML = filtered.map(tool => {
-              const iconHtml = tool.icon
-                ? `<img src="${escapeHtml(tool.icon)}" alt="" />`
-                : `<span class="tools-quick-icon-placeholder">${escapeHtml(tool.name.charAt(0))}</span>`;
-              return \`
-                <li data-url="\${escapeHtml(tool.url)}">
-                  <div class="tools-quick-icon">\${iconHtml}</div>
-                  <div class="tools-quick-info">
-                    <span class="tools-quick-name">\${escapeHtml(tool.name)}</span>
-                    <span class="tools-quick-desc">\${escapeHtml(tool.description || '')}</span>
-                  </div>
-                </li>
-              \`;
-            }).join('');
+            var html = '';
+            for (var i = 0; i < filtered.length; i++) {
+              var tool = filtered[i];
+              var iconHtml = tool.icon
+                ? '<img src="' + tool.icon.replace(/"/g, '&quot;') + '" alt="" />'
+                : '<span class="tools-quick-icon-placeholder">' + tool.name.charAt(0) + '</span>';
+              html += '<li data-url="' + tool.url.replace(/"/g, '&quot;') + '">';
+              html += '<div class="tools-quick-icon">' + iconHtml + '</div>';
+              html += '<div class="tools-quick-info">';
+              html += '<span class="tools-quick-name">' + tool.name.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</span>';
+              html += '<span class="tools-quick-desc">' + (tool.description || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</span>';
+              html += '</div></li>';
+            }
+            resultsList.innerHTML = html;
 
             countSpan.textContent = filtered.length;
             dropdown.style.display = 'flex';
 
-            // 点击跳转
-            resultsList.querySelectorAll('li').forEach(li => {
-              li.addEventListener('click', () => {
-                window.open(li.dataset.url, '_blank');
-                dropdown.style.display = 'none';
-                searchInput.value = '';
-                clearBtn.style.display = 'none';
-              });
-            });
+            var items = resultsList.querySelectorAll('li');
+            for (var j = 0; j < items.length; j++) {
+              (function(li) {
+                li.addEventListener('click', function() {
+                  window.open(li.dataset.url, '_blank');
+                  dropdown.style.display = 'none';
+                  searchInput.value = '';
+                  clearBtn.style.display = 'none';
+                });
+              })(items[j]);
+            }
           }
 
-          searchInput.addEventListener('input', () => {
-            const val = searchInput.value;
+          searchInput.addEventListener('input', function() {
+            var val = searchInput.value;
             clearBtn.style.display = val ? 'inline-block' : 'none';
             renderDropdown(val);
           });
 
-          searchInput.addEventListener('blur', () => {
-            setTimeout(() => { dropdown.style.display = 'none'; }, 200);
+          searchInput.addEventListener('blur', function() {
+            setTimeout(function() { dropdown.style.display = 'none'; }, 200);
           });
 
-          searchInput.addEventListener('focus', () => {
+          searchInput.addEventListener('focus', function() {
             if (searchInput.value.trim()) renderDropdown(searchInput.value);
           });
 
-          clearBtn.addEventListener('click', () => {
+          clearBtn.addEventListener('click', function() {
             searchInput.value = '';
             clearBtn.style.display = 'none';
             dropdown.style.display = 'none';
             searchInput.focus();
           });
 
-          // 键盘导航
-          let selectedIndex = -1;
-          searchInput.addEventListener('keydown', (e) => {
-            const items = resultsList.querySelectorAll('li');
+          var selectedIndex = -1;
+          searchInput.addEventListener('keydown', function(e) {
+            var items = resultsList.querySelectorAll('li');
             if (items.length === 0) return;
 
             if (e.key === 'ArrowDown') {
@@ -258,16 +255,14 @@ tools.get("/", async (c) => {
           });
 
           function updateSelected(items) {
-            items.forEach((item, index) => {
-              item.style.background = index === selectedIndex ? 'rgba(10,132,255,0.12)' : '';
-              if (index === selectedIndex) item.scrollIntoView({ block: 'nearest' });
-            });
-          }
-
-          // 转义函数（用于内联脚本）
-          function escapeHtml(str) {
-            if (!str) return '';
-            return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            for (var i = 0; i < items.length; i++) {
+              if (i === selectedIndex) {
+                items[i].style.background = 'rgba(10,132,255,0.12)';
+                items[i].scrollIntoView({ block: 'nearest' });
+              } else {
+                items[i].style.background = '';
+              }
+            }
           }
 
           dropdown.style.display = 'none';
