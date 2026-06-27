@@ -143,47 +143,6 @@ export const webMentions = sqliteTable(
 	],
 );
 
-// ─── 🆕 工具分类 ────────────────────────────────────────────────────────────
-
-export const toolCategories = sqliteTable(
-	"tool_categories",
-	{
-		id: integer("id").primaryKey({ autoIncrement: true }),
-		name: text("name").notNull().unique(),
-		sortOrder: integer("sort_order").default(0),
-		createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
-		updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
-	},
-	(table) => [
-		index("tool_categories_name_idx").on(table.name),
-		index("tool_categories_sort_idx").on(table.sortOrder),
-	],
-);
-
-// ─── 🆕 工具条目 ────────────────────────────────────────────────────────────
-
-export const toolItems = sqliteTable(
-	"tool_items",
-	{
-		id: integer("id").primaryKey({ autoIncrement: true }),
-		categoryId: integer("category_id")
-			.notNull()
-			.references(() => toolCategories.id, { onDelete: "cascade" }),
-		name: text("name").notNull(),
-		description: text("description"),
-		url: text("url").notNull(),
-		icon: text("icon"),
-		sortOrder: integer("sort_order").default(0),
-		createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
-		updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
-	},
-	(table) => [
-		index("tool_items_category_idx").on(table.categoryId),
-		index("tool_items_name_idx").on(table.name),
-		index("tool_items_sort_idx").on(table.sortOrder),
-	],
-);
-
 // ─── 站点外观设置 ────────────────────────────────────────────────────────────
 
 export const siteAppearanceSettings = sqliteTable("site_appearance_settings", {
@@ -353,15 +312,7 @@ export const loginAttempts = sqliteTable("login_attempts", {
 	lastAttempt: text("last_attempt"),
 });
 
-// ─── 🆕 类型导出 ────────────────────────────────────────────────────────────
-
-export type ToolCategory = typeof toolCategories.$inferSelect;
-export type NewToolCategory = typeof toolCategories.$inferInsert;
-
-export type ToolItem = typeof toolItems.$inferSelect;
-export type NewToolItem = typeof toolItems.$inferInsert;
-
-// ─── 类型导出（原有） ────────────────────────────────────────────────────────
+// ─── 类型导出 ────────────────────────────────────────────────────────────────
 
 export type BlogCategory = typeof blogCategories.$inferSelect;
 export type NewBlogCategory = typeof blogCategories.$inferInsert;

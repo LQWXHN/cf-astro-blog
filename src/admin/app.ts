@@ -12,6 +12,7 @@ import { mentionsRoutes } from "./routes/mentions";
 import { postsRoutes } from "./routes/posts";
 import { publicAiRoutes } from "./routes/public-ai";
 import { publicAnalyticsRoutes } from "./routes/public-analytics";
+import { toolsRoutes } from "./routes/tools"; // 🆕 导入工具箱路由
 import { webmentionRoutes } from "./routes/webmention";
 
 const app = new Hono<AdminAppEnv>();
@@ -88,6 +89,7 @@ app.route("/admin/friends", friendsRoutes);
 app.route("/admin/mentions", mentionsRoutes);
 app.route("/admin/media", mediaRoutes);
 app.route("/admin/analytics", analyticsRoutes);
+app.route("/admin/tools", toolsRoutes); // 🆕 注册工具箱路由
 app.route("/friend-links", friendLinksRoutes);
 app.route("/webmention", webmentionRoutes);
 
