@@ -23,6 +23,13 @@
 		}
 	],
 
+    "r2_buckets": [
+        {
+            "binding": "MEDIA_BUCKET",
+            "bucket_name": "blog-media"
+        }
+    ],
+
 	"kv_namespaces": [
 		{
 			"binding": "SESSION",
