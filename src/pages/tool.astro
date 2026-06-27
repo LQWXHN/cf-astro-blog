@@ -35,13 +35,13 @@ const categorized = categories.map((cat) => ({
   items: allTools.filter((tool) => tool.categoryId === cat.id),
 }));
 
-// 序列化工具数据到 JS
-const toolsJson = JSON.stringify(allTools);
+// 安全地序列化数据：转义 </ 防止破坏 <script> 标签
+const toolsJson = JSON.stringify(allTools).replace(/<\//g, '<\\/');
 ---
 
 <Base title="百宝箱" description="常用的工具，点击直达">
   <section class="tools-hero glass-panel">
-    <span class="section-kicker">工具箱</span>
+    <span class="section-kicker">🧰 工具箱</span>
     <h1 class="page-title">工具箱</h1>
     <p class="page-intro">常用的工具，点击直达</p>
   </section>
@@ -535,130 +535,129 @@ const toolsJson = JSON.stringify(allTools);
 </style>
 
 <script>
-  document.addEventListener('DOMContentLoaded', () => {
-    const allTools = ${toolsJson};
+  // 注意：这里使用 JSON.parse 安全解析数据，避免 XSS 和语法错误
+  const allTools = JSON.parse(`<%- toolsJson %>`);
 
-    const searchInput = document.getElementById('toolSearchInput');
-    const clearBtn = document.getElementById('toolSearchClear');
-    const dropdown = document.getElementById('toolSearchDropdown');
-    const resultsList = document.getElementById('toolSearchResults');
-    const countSpan = document.getElementById('toolSearchCount');
-    const statusEl = document.getElementById('toolSearchStatus');
+  const searchInput = document.getElementById('toolSearchInput');
+  const clearBtn = document.getElementById('toolSearchClear');
+  const dropdown = document.getElementById('toolSearchDropdown');
+  const resultsList = document.getElementById('toolSearchResults');
+  const countSpan = document.getElementById('toolSearchCount');
+  const statusEl = document.getElementById('toolSearchStatus');
 
-    let selectedIndex = -1;
+  let selectedIndex = -1;
 
-    function renderDropdown(query) {
-      const q = query.trim().toLowerCase();
-      let filtered = [];
-      if (q) {
-        filtered = allTools.filter(tool =>
-          tool.name.toLowerCase().includes(q) ||
-          (tool.description && tool.description.toLowerCase().includes(q))
-        );
-      }
-
-      if (filtered.length === 0 || !q) {
-        dropdown.style.display = 'none';
-        statusEl.className = 'tools-search-status';
-        statusEl.textContent = '';
-        return;
-      }
-
-      resultsList.innerHTML = filtered.map(tool => `
-        <li data-url="${tool.url}">
-          <div class="tools-quick-icon">
-            ${tool.icon ? `<img src="${tool.icon}" alt="" />` : `<span>${tool.name.charAt(0)}</span>`}
-          </div>
-          <div class="tools-quick-info">
-            <span class="tools-quick-name">${tool.name}</span>
-            <span class="tools-quick-desc">${tool.description || ''}</span>
-          </div>
-        </li>
-      `).join('');
-
-      countSpan.textContent = filtered.length;
-      dropdown.style.display = 'flex';
-
-      // 点击跳转
-      resultsList.querySelectorAll('li').forEach(li => {
-        li.addEventListener('click', () => {
-          window.open(li.dataset.url, '_blank');
-          dropdown.style.display = 'none';
-          searchInput.value = '';
-          clearBtn.style.display = 'none';
-          statusEl.className = 'tools-search-status';
-          statusEl.textContent = '';
-          selectedIndex = -1;
-        });
-      });
-
-      selectedIndex = -1;
+  function renderDropdown(query) {
+    const q = query.trim().toLowerCase();
+    let filtered = [];
+    if (q) {
+      filtered = allTools.filter(tool =>
+        tool.name.toLowerCase().includes(q) ||
+        (tool.description && tool.description.toLowerCase().includes(q))
+      );
     }
 
-    searchInput.addEventListener('input', () => {
-      const val = searchInput.value;
-      clearBtn.style.display = val ? 'inline-block' : 'none';
-      renderDropdown(val);
-    });
-
-    searchInput.addEventListener('blur', () => {
-      setTimeout(() => {
-        dropdown.style.display = 'none';
-      }, 200);
-    });
-
-    searchInput.addEventListener('focus', () => {
-      if (searchInput.value.trim()) renderDropdown(searchInput.value);
-    });
-
-    clearBtn.addEventListener('click', () => {
-      searchInput.value = '';
-      clearBtn.style.display = 'none';
+    if (filtered.length === 0 || !q) {
       dropdown.style.display = 'none';
       statusEl.className = 'tools-search-status';
       statusEl.textContent = '';
-      searchInput.focus();
-      selectedIndex = -1;
-    });
-
-    // 键盘导航
-    searchInput.addEventListener('keydown', (e) => {
-      const items = resultsList.querySelectorAll('li');
-      if (items.length === 0) return;
-
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
-        updateSelected(items);
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        selectedIndex = Math.max(selectedIndex - 1, -1);
-        updateSelected(items);
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        if (selectedIndex >= 0 && items[selectedIndex]) {
-          window.open(items[selectedIndex].dataset.url, '_blank');
-          dropdown.style.display = 'none';
-          searchInput.value = '';
-          clearBtn.style.display = 'none';
-          statusEl.className = 'tools-search-status';
-          statusEl.textContent = '';
-          selectedIndex = -1;
-        }
-      }
-    });
-
-    function updateSelected(items) {
-      items.forEach((item, index) => {
-        if (index === selectedIndex) {
-          item.style.background = 'rgba(10,132,255,0.12)';
-          item.scrollIntoView({ block: 'nearest' });
-        } else {
-          item.style.background = '';
-        }
-      });
+      return;
     }
 
-    dropdown.style.display = 'none';
+    resultsList.innerHTML = filtered.map(tool => `
+      <li data-url="${tool.url}">
+        <div class="tools-quick-icon">
+          ${tool.icon ? `<img src="${tool.icon}" alt="" />` : `<span>${tool.name.charAt(0)}</span>`}
+        </div>
+        <div class="tools-quick-info">
+          <span class="tools-quick-name">${tool.name}</span>
+          <span class="tools-quick-desc">${tool.description || ''}</span>
+        </div>
+      </li>
+    `).join('');
+
+    countSpan.textContent = filtered.length;
+    dropdown.style.display = 'flex';
+
+    // 点击跳转
+    resultsList.querySelectorAll('li').forEach(li => {
+      li.addEventListener('click', () => {
+        window.open(li.dataset.url, '_blank');
+        dropdown.style.display = 'none';
+        searchInput.value = '';
+        clearBtn.style.display = 'none';
+        statusEl.className = 'tools-search-status';
+        statusEl.textContent = '';
+        selectedIndex = -1;
+      });
+    });
+
+    selectedIndex = -1;
+  }
+
+  searchInput.addEventListener('input', () => {
+    const val = searchInput.value;
+    clearBtn.style.display = val ? 'inline-block' : 'none';
+    renderDropdown(val);
   });
+
+  searchInput.addEventListener('blur', () => {
+    setTimeout(() => {
+      dropdown.style.display = 'none';
+    }, 200);
+  });
+
+  searchInput.addEventListener('focus', () => {
+    if (searchInput.value.trim()) renderDropdown(searchInput.value);
+  });
+
+  clearBtn.addEventListener('click', () => {
+    searchInput.value = '';
+    clearBtn.style.display = 'none';
+    dropdown.style.display = 'none';
+    statusEl.className = 'tools-search-status';
+    statusEl.textContent = '';
+    searchInput.focus();
+    selectedIndex = -1;
+  });
+
+  // 键盘导航
+  searchInput.addEventListener('keydown', (e) => {
+    const items = resultsList.querySelectorAll('li');
+    if (items.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+      updateSelected(items);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      selectedIndex = Math.max(selectedIndex - 1, -1);
+      updateSelected(items);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (selectedIndex >= 0 && items[selectedIndex]) {
+        window.open(items[selectedIndex].dataset.url, '_blank');
+        dropdown.style.display = 'none';
+        searchInput.value = '';
+        clearBtn.style.display = 'none';
+        statusEl.className = 'tools-search-status';
+        statusEl.textContent = '';
+        selectedIndex = -1;
+      }
+    }
+  });
+
+  function updateSelected(items) {
+    items.forEach((item, index) => {
+      if (index === selectedIndex) {
+        item.style.background = 'rgba(10,132,255,0.12)';
+        item.scrollIntoView({ block: 'nearest' });
+      } else {
+        item.style.background = '';
+      }
+    });
+  }
+
+  dropdown.style.display = 'none';
 </script>
