@@ -447,7 +447,7 @@ export function loginPage(options: LoginPageOptions = {}): string {
 		<header class="entry-header">
 			<a href="/" class="entry-brand" aria-label="返回 SengokuCola's HOME 首页">
 				<img
-					src="https://tc.nibutupaopao.top/i/2026/06/20/rbrhb8.png"
+					src="https://lsky.nibutupaopao.top/i/2026/07/09/6a4fc40211f69.png"
 					alt=""
 					class="entry-brand-logo"
 				/>
