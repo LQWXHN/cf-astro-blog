@@ -45,7 +45,7 @@ function applySecurityHeaders(pathname: string, response: Response) {
 				"form-action 'self'",
 				"script-src 'self' https://challenges.cloudflare.com",
 				"style-src 'self' 'unsafe-inline'",
-				"img-src 'self' data: https://tc.nibutupaopao.top",
+				"img-src 'self' data: https://lsky.nibutupaopao.top",
 				"font-src 'self'",
 				"connect-src 'self' https://challenges.cloudflare.com",
 				"frame-src https://challenges.cloudflare.com",
