@@ -66,7 +66,7 @@ function applySecurityHeaders(pathname: string, response: Response) {
 				"script-src 'self' https://static.cloudflareinsights.com", // 🆕 允许 Cloudflare Insights
 				"style-src 'self' 'unsafe-inline'",
 				"img-src 'self' data:",
-				"font-src 'self'",
+				"font-src 'self' https://challenges.cloudflare.com",
 				"connect-src 'self'",
 			].join("; "),
 		);
