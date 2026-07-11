@@ -1,0 +1,113 @@
+---
+import { env } from "cloudflare:workers";
+import { notes } from "@/db/schema";
+import Base from "@/layouts/Base.astro";
+import { getDb } from "@/lib/db";
+
+const colorThemes = ["yellow", "blue", "green", "pink", "purple", "orange"];
+
+// 处理 POST 提交
+if (Astro.request.method === "POST") {
+  const formData = await Astro.request.formData();
+  const content = formData.get("content")?.toString().trim();
+  const colorTheme = formData.get("color")?.toString() || "yellow";
+
+  if (content && content.length <= 500) {
+    const db = getDb(env.DB);
+    await db.insert(notes).values({
+      content,
+      colorTheme,
+      positionLeft: Math.floor(Math.random() * 70) + 5,
+      positionTop: Math.floor(Math.random() * 70) + 5,
+      rotation: Math.floor(Math.random() * 30) - 15,
+      status: "pending",
+      visitorIp: Astro.clientAddress || "匿名",
+    });
+    return Astro.redirect("/notes");
+  }
+}
+---
+
+<Base title="发布便签" description="留下你的便签">
+  <div class="new-note-container">
+    <h1>✏️ 发布便签</h1>
+    <p class="subtitle">写下你想说的话，审核通过后会出现在便签墙上</p>
+
+    <form method="POST" class="new-note-form">
+      <div class="form-group">
+        <label for="content">便签内容</label>
+        <textarea
+          id="content"
+          name="content"
+          class="form-textarea"
+          placeholder="输入新的便签..."
+          maxlength="500"
+          required
+          rows="4"
+        ></textarea>
+        <span class="char-count" id="charCount">0/500</span>
+      </div>
+
+      <div class="form-group">
+        <label>选择颜色</label>
+        <div class="color-options">
+          {colorThemes.map(color => (
+            <label class="color-option">
+              <input type="radio" name="color" value={color} checked={color === "yellow"} />
+              <span class={`color-swatch ${color}`}></span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary">发布便签</button>
+    </form>
+
+    <a href="/notes" class="back-link">← 返回便签墙</a>
+  </div>
+</Base>
+
+<style>
+  .new-note-container {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 2rem 0;
+  }
+  .new-note-container h1 { margin-bottom: 0.2rem; }
+  .subtitle { color: var(--color-text-muted); margin-bottom: 2rem; }
+
+  .new-note-form { display: flex; flex-direction: column; gap: 1.5rem; }
+  .char-count { display: block; text-align: right; font-size: 0.8rem; color: var(--color-text-muted); margin-top: 0.2rem; }
+
+  .color-options { display: flex; gap: 0.8rem; flex-wrap: wrap; }
+  .color-option { display: flex; align-items: center; gap: 0.3rem; cursor: pointer; }
+  .color-option input { display: none; }
+  .color-swatch {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    transition: border-color 0.2s, transform 0.2s;
+  }
+  .color-option input:checked + .color-swatch {
+    border-color: var(--color-accent);
+    transform: scale(1.1);
+  }
+  .color-swatch.yellow { background: #fff8e1; border-color: #ffd54f; }
+  .color-swatch.blue { background: #e3f2fd; border-color: #64b5f6; }
+  .color-swatch.green { background: #e8f5e9; border-color: #81c784; }
+  .color-swatch.pink { background: #fce4ec; border-color: #f06292; }
+  .color-swatch.purple { background: #f3e5f5; border-color: #ba68c8; }
+  .color-swatch.orange { background: #fff3e0; border-color: #ffb74d; }
+
+  .back-link { display: inline-block; margin-top: 1.5rem; color: var(--color-text-muted); text-decoration: none; }
+  .back-link:hover { color: var(--color-accent); }
+</style>
+
+<script>
+  const textarea = document.getElementById('content');
+  const charCount = document.getElementById('charCount');
+  textarea?.addEventListener('input', () => {
+    charCount.textContent = `${textarea.value.length}/500`;
+  });
+</script>

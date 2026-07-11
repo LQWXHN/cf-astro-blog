@@ -1,0 +1,119 @@
+---
+import { env } from "cloudflare:workers";
+import { asc, desc, eq } from "drizzle-orm";
+import { notes } from "@/db/schema";
+import Base from "@/layouts/Base.astro";
+import { getDb } from "@/lib/db";
+
+const db = getDb(env.DB);
+const allNotes = await db
+  .select()
+  .from(notes)
+  .where(eq(notes.status, "approved"))
+  .orderBy(asc(notes.isPinned), desc(notes.createdAt));
+
+const colorThemes = {
+  yellow: { bg: "#fff8e1", border: "#ffd54f", shadow: "rgba(255,193,7,0.3)" },
+  blue: { bg: "#e3f2fd", border: "#64b5f6", shadow: "rgba(33,150,243,0.3)" },
+  green: { bg: "#e8f5e9", border: "#81c784", shadow: "rgba(76,175,80,0.3)" },
+  pink: { bg: "#fce4ec", border: "#f06292", shadow: "rgba(233,30,99,0.3)" },
+  purple: { bg: "#f3e5f5", border: "#ba68c8", shadow: "rgba(156,39,176,0.3)" },
+  orange: { bg: "#fff3e0", border: "#ffb74d", shadow: "rgba(255,152,0,0.3)" },
+};
+---
+
+<Base title="便签墙" description="访客留言便签墙">
+  <div class="notes-header">
+    <h1>📌 便签墙</h1>
+    <a href="/notes/new" class="btn btn-primary">✏️ 发布便签</a>
+  </div>
+
+  <div class="notes-wall" id="notesWall">
+    {allNotes.map((note, index) => {
+      const theme = colorThemes[note.colorTheme as keyof typeof colorThemes] || colorThemes.yellow;
+      const delay = Math.min(index * 50, 1000);
+      return (
+        <div
+          class="note-card"
+          style={`
+            left: ${note.positionLeft}%;
+            top: ${note.positionTop}%;
+            transform: rotate(${note.rotation}deg);
+            background: ${theme.bg};
+            border-color: ${theme.border};
+            box-shadow: 0 4px 16px ${theme.shadow};
+            animation-delay: ${delay}ms;
+            z-index: ${note.isPinned ? 100 : 1};
+          `}
+          data-note-id={note.id}
+          onclick="this.style.zIndex = 100; this.style.boxShadow = '0 8px 32px rgba(0,0,0,0.2)'"
+        >
+          <p class="note-content">{note.content}</p>
+          <span class="note-time">{new Date(note.createdAt).toLocaleDateString()}</span>
+        </div>
+      );
+    })}
+  </div>
+</Base>
+
+<style>
+  .notes-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 0;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  .notes-header h1 { margin: 0; }
+
+  .notes-wall {
+    position: relative;
+    min-height: 600px;
+    padding: 2rem;
+    background: rgba(255,255,255,0.03);
+    border-radius: var(--radius-lg);
+    border: 1px dashed var(--color-border);
+  }
+
+  .note-card {
+    position: absolute;
+    padding: 1rem 1.2rem;
+    border-radius: 12px;
+    border: 1px solid;
+    min-width: 140px;
+    max-width: 220px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s, z-index 0s;
+    animation: noteAppear 0.5s ease both;
+    user-select: none;
+  }
+  .note-card:hover {
+    transform: scale(1.04) rotate(0deg) !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15) !important;
+  }
+  .note-card .note-content {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    word-break: break-word;
+  }
+  .note-card .note-time {
+    display: block;
+    margin-top: 0.4rem;
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+    opacity: 0.7;
+  }
+
+  @keyframes noteAppear {
+    from { opacity: 0; transform: scale(0.8) rotate(10deg); }
+    to { opacity: 1; transform: scale(1) rotate(0); }
+  }
+
+  @media (max-width: 768px) {
+    .notes-wall { min-height: 400px; padding: 1rem; }
+    .note-card { min-width: 100px; max-width: 160px; padding: 0.7rem 0.9rem; }
+    .note-card .note-content { font-size: 0.8rem; }
+  }
+</style>

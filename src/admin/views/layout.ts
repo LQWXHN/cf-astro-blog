@@ -18,11 +18,12 @@ const navItems: Array<{ key: AdminNavKey; label: string; href: string }> = [
 	{ key: "dashboard", label: "控制台", href: "/api/admin" },
 	{ key: "appearance", label: "外观", href: "/api/admin/appearance" },
 	{ key: "posts", label: "文章", href: "/api/admin/posts" },
+	{ key: "tools", label: "工具箱", href: "/api/admin/tools" }, // 🆕 添加工具箱菜单
+	{ key: "notes", label: "便签墙", href: "/api/admin/notes" },
 	{ key: "friends", label: "友链", href: "/api/admin/friends" },
 	{ key: "mentions", label: "提及", href: "/api/admin/mentions" },
 	{ key: "media", label: "媒体", href: "/api/admin/media" },
 	{ key: "analytics", label: "统计", href: "/api/admin/analytics" },
-	{ key: "tools", label: "工具箱", href: "/api/admin/tools" }, // 🆕 添加工具箱菜单
 ];
 
 export const adminSharedStyles = `

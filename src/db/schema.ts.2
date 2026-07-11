@@ -184,38 +184,6 @@ export const toolItems = sqliteTable(
 	],
 );
 
-// ===== 便签表 =====
-export const notes = sqliteTable(
-  "notes",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    content: text("content").notNull(),
-    // 随机位置：left 百分比, top 百分比
-    positionLeft: integer("position_left").notNull().default(10),
-    positionTop: integer("position_top").notNull().default(10),
-    // 随机旋转角度 (-15deg ~ 15deg)
-    rotation: integer("rotation").notNull().default(0),
-    // 随机颜色主题
-    colorTheme: text("color_theme").notNull().default("yellow"),
-    // 是否置顶（被点击后置顶）
-    isPinned: integer("is_pinned", { mode: "boolean" }).default(false),
-    // 访客IP（用于展示）
-    visitorIp: text("visitor_ip"),
-    // 状态：pending（待审核）, approved（已通过）, rejected（已拒绝）
-    status: text("status").notNull().default("pending"),
-    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
-    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
-  },
-  (table) => [
-    index("notes_status_idx").on(table.status),
-    index("notes_created_idx").on(table.createdAt),
-  ],
-);
-
-// ===== 类型导出 =====
-export type Note = typeof notes.$inferSelect;
-export type NewNote = typeof notes.$inferInsert;
-
 // ─── 站点外观设置 ────────────────────────────────────────────────────────────
 
 export const siteAppearanceSettings = sqliteTable("site_appearance_settings", {

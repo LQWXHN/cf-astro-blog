@@ -9,6 +9,7 @@ import { friendsRoutes } from "./routes/friends";
 import { mcpRoutes } from "./routes/mcp";
 import { mediaRoutes } from "./routes/media";
 import { mentionsRoutes } from "./routes/mentions";
+import { notesRoutes } from "./routes/notes"; // 🆕 导入便签路由
 import { postsRoutes } from "./routes/posts";
 import { publicAiRoutes } from "./routes/public-ai";
 import { publicAnalyticsRoutes } from "./routes/public-analytics";
@@ -63,10 +64,10 @@ function applySecurityHeaders(pathname: string, response: Response) {
 				"frame-ancestors 'none'",
 				"object-src 'none'",
 				"form-action 'self'",
-				"script-src 'self' https://static.cloudflareinsights.com", // 🆕 允许 Cloudflare Insights
+				"script-src 'self' https://static.cloudflareinsights.com",
 				"style-src 'self' 'unsafe-inline'",
-				"img-src 'self' data:",
-				"font-src 'self' https://challenges.cloudflare.com",
+				"img-src 'self' data: https://lsky.nibutupaopao.top", // ✅ 也允许图床
+				"font-src 'self'",
 				"connect-src 'self'",
 			].join("; "),
 		);
@@ -90,6 +91,7 @@ app.route("/admin/mentions", mentionsRoutes);
 app.route("/admin/media", mediaRoutes);
 app.route("/admin/analytics", analyticsRoutes);
 app.route("/admin/tools", toolsRoutes);
+app.route("/admin/notes", notesRoutes); // 🆕 注册便签路由
 app.route("/friend-links", friendLinksRoutes);
 app.route("/webmention", webmentionRoutes);
 
