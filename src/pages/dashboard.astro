@@ -1,26 +1,24 @@
 ---
 import { env } from "cloudflare:workers";
 import Base from "@/layouts/Base.astro";
-import { dashboardLinks } from "@/db/schema";
-import { getDb } from "@/lib/db";
 
 // ===== 配置区 =====
 const UAPI_KEY = "uapi-nwvozms5PJdxLNRw3TJUSQ4nmP_54yHVi9XzIrXX";
 
-// ===== 通过 UAPI IPinfo 获取精确地理位置（精确到区县） =====
+// ===== 通过 IP 查询获取精确地理位置（精确到区县） =====
 async function fetchLocationByIP() {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(`https://uapis.cn/api/v1/network/ipinfo?ip=&source=commercial`, {
+    const res = await fetch(`https://ip9.com.cn/get`, {
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    if (data && data.ret === 200 && data.data) {
-      const { district, city, region } = data.data;
-      return district && district !== "未知" ? district : city || region || "北京";
+    if (data.ret === 200 && data.data) {
+      const { city, area } = data.data;
+      return area && area !== "未知" ? area : city || "北京";
     }
     return "北京";
   } catch {
@@ -30,13 +28,13 @@ async function fetchLocationByIP() {
   }
 }
 
-// ===== 获取完整天气数据 =====
+// ===== 获取实时天气 =====
 async function fetchWeather(location: string) {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
     const res = await fetch(
-      `https://uapis.cn/api/v1/misc/weather?city=${encodeURIComponent(location)}&extended=true&forecast=true&hourly=true&indices=true&lang=zh`,
+      `https://uapis.cn/api/v1/misc/weather?city=${encodeURIComponent(location)}&extended=true&forecast=true&lang=zh`,
       {
         headers: { Authorization: `Bearer ${UAPI_KEY}` },
         signal: controller.signal,
@@ -92,11 +90,14 @@ async function fetchHoliday() {
 // ===== 获取一言（每日更新） =====
 async function fetchSaying(env: any) {
   try {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    // 尝试从 KV 获取今天的一言
     const stored = await env.SESSION?.get('saying_today', 'json');
     if (stored && stored.date === today && stored.text) {
       return { text: stored.text };
     }
+
+    // KV 中没有或过期，请求新的一言
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
     const res = await fetch(`https://uapis.cn/api/v1/saying`, {
@@ -106,10 +107,11 @@ async function fetchSaying(env: any) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (data && data.text) {
+      // 存入 KV，有效期设为 24 小时（或次日自动过期）
       await env.SESSION?.put('saying_today', JSON.stringify({
         date: today,
         text: data.text
-      }), { expirationTtl: 86400 });
+      }), { expirationTtl: 86400 }); // 24 小时
       return { text: data.text };
     }
     return null;
@@ -118,7 +120,27 @@ async function fetchSaying(env: any) {
   }
 }
 
-// ===== 计算日期进度 =====
+// ===== 获取必应壁纸 =====
+async function fetchBingWallpaper() {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(
+      `https://uapis.cn/api/v1/image/bing-daily?format=json&resolution=4k`,
+      {
+        headers: { Authorization: `Bearer ${UAPI_KEY}` },
+        signal: controller.signal,
+      }
+    );
+    clearTimeout(timeoutId);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+// ===== 计算日期进度（返回起始和结束时间戳） =====
 function getDateProgress() {
   const now = new Date();
   const yearStart = new Date(now.getFullYear(), 0, 1);
@@ -165,24 +187,19 @@ function getDateProgress() {
 
 // ===== 主流程 =====
 const location = await fetchLocationByIP();
-const [weather, hotboard, holiday, saying] = await Promise.all([
+const [weather, hotboard, holiday, saying, bing] = await Promise.all([
   fetchWeather(location),
   fetchHotboard(),
   fetchHoliday(),
   fetchSaying(env),
+  fetchBingWallpaper(),
 ]);
 
 const progress = getDateProgress();
 const nextHoliday = holiday?.nearby?.[0];
 const holidayTarget = nextHoliday ? new Date(nextHoliday.date).getTime() : null;
 
-// 获取 Dashboard Links
-const db = getDb(env.DB);
-const links = await db
-  .select()
-  .from(dashboardLinks)
-  .orderBy(dashboardLinks.sortOrder);
-
+// 准备传递给客户端的数据
 const scriptData = {
   yearStart: progress.yearStart,
   yearEnd: progress.yearEnd,
@@ -192,20 +209,6 @@ const scriptData = {
   weekEnd: progress.weekEnd,
   holidayTarget: holidayTarget,
 };
-
-// 天气图标映射
-function getWeatherEmoji(code: string): string {
-  const map: Record<string, string> = {
-    '00': '☀️', '01': '☀️', '02': '⛅', '03': '⛅', '04': '☁️',
-    '05': '🌤️', '06': '🌥️', '07': '☁️', '08': '🌧️', '09': '🌧️',
-    '10': '🌦️', '11': '⛈️', '12': '⛈️', '13': '🌨️', '14': '🌨️',
-    '15': '🌨️', '16': '🌨️', '17': '🌧️', '18': '🌨️', '19': '🌫️',
-    '20': '🌫️', '21': '🌫️', '22': '🌫️', '23': '🌪️', '24': '🌪️',
-    '25': '🌧️', '26': '🌧️', '27': '❄️', '28': '❄️', '29': '❄️',
-    '30': '☀️', '31': '🌙', '32': '🌙', '99': '🌫️'
-  };
-  return map[code] || '🌤️';
-}
 ---
 
 <Base title="仪表盘" description="信息聚合中心">
@@ -224,87 +227,30 @@ function getWeatherEmoji(code: string): string {
       </div>
     </div>
 
-    <!-- 2. 今日天气（占1列，恢复原始大小） -->
-    <div class="dashboard-card glass-panel weather-card">
+    <!-- 2. 今日天气 -->
+    <div class="dashboard-card glass-panel">
       <div class="card-header">
         <span class="card-icon">🌤️</span>
-        <span class="card-title">今日天气 · {weather?.district ? `${weather.city} ${weather.district}` : location}</span>
+        <span class="card-title">今日天气 · {location}</span>
       </div>
       {weather ? (
         <div class="weather-content">
           <div class="weather-main">
-            <div class="weather-temp-group">
-              <span class="weather-temp">{weather.temperature}°C</span>
-              <span class="weather-icon">{getWeatherEmoji(weather.weather_icon)}</span>
-              <span class="weather-desc">{weather.weather}</span>
-            </div>
-            <div class="weather-extras">
-              <span>🌡️ 体感 {weather.feels_like}°C</span>
-              <span>💧 湿度 {weather.humidity}%</span>
-              <span>🌬️ {weather.wind_direction} {weather.wind_power}</span>
-            </div>
+            <span class="weather-temp">{weather.temp}°C</span>
+            <span class="weather-desc">{weather.weather}</span>
           </div>
-          <div class="weather-extended">
-            <span>👁️ 能见度 {weather.visibility}km</span>
-            <span>📊 气压 {weather.pressure}hPa</span>
-            <span>☀️ 紫外线 {weather.uv}</span>
-            <span>🌧️ 降水量 {weather.precipitation}mm</span>
-            <span>☁️ 云量 {weather.cloud}%</span>
-            {weather.aqi && (
-              <span style="display:inline-block; background:rgba(10,132,255,0.1); padding:0 8px; border-radius:12px; font-size:0.75rem;">AQI {weather.aqi} {weather.aqi_category}</span>
-            )}
+          <div class="weather-details">
+            <span>🌡️ 体感 {weather.feels_like}°C</span>
+            <span>💧 湿度 {weather.humidity}%</span>
+            <span>🌬️ 风速 {weather.wind_speed}km/h</span>
           </div>
-          {weather.air_pollutants && (
-            <div style="display:flex; flex-wrap:wrap; gap:0.3rem 0.8rem; font-size:0.7rem; color:var(--color-text-muted);">
-              <span>PM2.5: {weather.air_pollutants.pm25}</span>
-              <span>PM10: {weather.air_pollutants.pm10}</span>
-              <span>O₃: {weather.air_pollutants.o3}</span>
-              <span>NO₂: {weather.air_pollutants.no2}</span>
-            </div>
-          )}
-          {weather.forecast && weather.forecast.length > 0 && (
-            <div style="margin-top:0.3rem;">
-              <div style="font-size:0.7rem; font-weight:600; margin-bottom:0.2rem;">📅 7天</div>
-              <div style="display:flex; gap:0.4rem; overflow-x:auto; padding-bottom:0.2rem;">
-                {weather.forecast.map((day: any) => (
-                  <div style="flex:0 0 auto; min-width:44px; text-align:center; font-size:0.6rem; background:rgba(255,255,255,0.04); border-radius:8px; padding:2px 4px;">
-                    <div>{day.date.slice(5)}</div>
-                    <div>{day.temp_min}°~{day.temp_max}°</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {weather.hourly_forecast && weather.hourly_forecast.length > 0 && (
-            <div style="margin-top:0.3rem;">
-              <div style="font-size:0.7rem; font-weight:600; margin-bottom:0.2rem;">⏰ 逐小时</div>
-              <div style="display:flex; gap:0.4rem; overflow-x:auto; padding-bottom:0.2rem;">
-                {weather.hourly_forecast.slice(0, 8).map((hour: any) => (
-                  <div style="flex:0 0 auto; min-width:36px; text-align:center; font-size:0.6rem; background:rgba(255,255,255,0.04); border-radius:6px; padding:2px 4px;">
-                    <div>{new Date(hour.time).getHours()}时</div>
-                    <div>{hour.temperature}°</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {weather.life_indices && (
-            <div style="margin-top:0.3rem;">
-              <div style="font-size:0.7rem; font-weight:600; margin-bottom:0.2rem;">💡 指数</div>
-              <div style="display:flex; flex-wrap:wrap; gap:0.2rem 0.6rem;">
-                {Object.entries(weather.life_indices).map(([key, value]: [string, any]) => (
-                  <span style="font-size:0.6rem; background:rgba(255,255,255,0.04); padding:1px 6px; border-radius:10px; color:var(--color-text-muted);">{key}: {value.brief}</span>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       ) : (
         <p class="empty-state">暂无天气数据</p>
       )}
     </div>
 
-    <!-- 3. 今日一言（占1列） -->
+    <!-- 3. 今日一言（替换原来的近7天天气） -->
     <div class="dashboard-card glass-panel">
       <div class="card-header">
         <span class="card-icon">💬</span>
@@ -313,44 +259,7 @@ function getWeatherEmoji(code: string): string {
       <p class="saying-text">“{saying?.text || '加载中...'}”</p>
     </div>
 
-    <!-- 4. 日历 + 进度（占2列，恢复原始大小） -->
-    <div class="dashboard-card glass-panel" style="grid-column: span 2;">
-      <div class="card-header">
-        <span class="card-icon">📅</span>
-        <span class="card-title">日历 & 进度</span>
-      </div>
-      <div class="calendar-content">
-        <div class="progress-item">
-          <span id="yearLabel">本年剩余 <strong id="yearRemain">{progress.yearRemain}</strong> </span>
-          <div class="progress-bar">
-            <div class="progress-fill" id="yearProgressFill" style="width: {progress.yearProgress}%;"></div>
-          </div>
-          <span class="progress-label" id="yearPercent">{progress.yearProgress}%</span>
-        </div>
-        <div class="progress-item">
-          <span id="monthLabel">本月剩余 <strong id="monthRemain">{progress.monthRemain}</strong> </span>
-          <div class="progress-bar">
-            <div class="progress-fill" id="monthProgressFill" style="width: {progress.monthProgress}%;"></div>
-          </div>
-          <span class="progress-label" id="monthPercent">{progress.monthProgress}%</span>
-        </div>
-        <div class="progress-item">
-          <span id="weekLabel">本周剩余 <strong id="weekRemain">{progress.weekRemain}</strong> </span>
-          <div class="progress-bar">
-            <div class="progress-fill" id="weekProgressFill" style="width: {progress.weekProgress}%;"></div>
-          </div>
-          <span class="progress-label" id="weekPercent">{progress.weekProgress}%</span>
-        </div>
-        {nextHoliday && (
-          <div class="next-holiday" id="holidayInfo">
-            🎉 距离 <strong>{nextHoliday.name}</strong> 还有{' '}
-            <strong id="holidayRemain">{nextHoliday.days_until}</strong> 天
-          </div>
-        )}
-      </div>
-    </div>
-
-    <!-- 5. 热榜（占2列） -->
+    <!-- 4. 热榜 -->
     <div class="dashboard-card glass-panel" style="grid-column: span 2;">
       <div class="card-header">
         <span class="card-icon">🔥</span>
@@ -373,40 +282,56 @@ function getWeatherEmoji(code: string): string {
       )}
     </div>
 
-    <!-- 6. Links 区域（占2列） -->
+    <!-- 5. 日历 + 进度 -->
+    <div class="dashboard-card glass-panel">
+      <div class="card-header">
+        <span class="card-icon">📅</span>
+        <span class="card-title">日历 & 进度</span>
+      </div>
+      <div class="calendar-content">
+        <div class="progress-item">
+          <span id="yearLabel">本年剩余 <strong id="yearRemain">{progress.yearRemain}</strong> 天</span>
+          <div class="progress-bar">
+            <div class="progress-fill" id="yearProgressFill" style="width: {progress.yearProgress}%;"></div>
+          </div>
+          <span class="progress-label" id="yearPercent">{progress.yearProgress}%</span>
+        </div>
+        <div class="progress-item">
+          <span id="monthLabel">本月剩余 <strong id="monthRemain">{progress.monthRemain}</strong> 天</span>
+          <div class="progress-bar">
+            <div class="progress-fill" id="monthProgressFill" style="width: {progress.monthProgress}%;"></div>
+          </div>
+          <span class="progress-label" id="monthPercent">{progress.monthProgress}%</span>
+        </div>
+        <div class="progress-item">
+          <span id="weekLabel">本周剩余 <strong id="weekRemain">{progress.weekRemain}</strong> 天</span>
+          <div class="progress-bar">
+            <div class="progress-fill" id="weekProgressFill" style="width: {progress.weekProgress}%;"></div>
+          </div>
+          <span class="progress-label" id="weekPercent">{progress.weekProgress}%</span>
+        </div>
+        {nextHoliday && (
+          <div class="next-holiday" id="holidayInfo">
+            🎉 距离 <strong>{nextHoliday.name}</strong> 还有{' '}
+            <strong id="holidayRemain">{nextHoliday.days_until}</strong> 天
+          </div>
+        )}
+      </div>
+    </div>
+
+    <!-- 6. 必应壁纸（占两列） -->
     <div class="dashboard-card glass-panel" style="grid-column: span 2;">
       <div class="card-header">
-        <span class="card-icon">🔗</span>
-        <span class="card-title">快捷链接</span>
+        <span class="card-icon">🖼️</span>
+        <span class="card-title">今日壁纸</span>
       </div>
-      {links.length > 0 ? (
-        <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap:0.6rem;">
-          {links.map((link) => (
-            <a
-              href={link.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              style="display:flex; align-items:center; gap:0.4rem; padding:0.5rem 0.8rem; border-radius:var(--radius-inner); background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); text-decoration:none; color:var(--color-text); transition:background 0.2s;"
-              onmouseover="this.style.background='rgba(255,255,255,0.08)'"
-              onmouseout="this.style.background='rgba(255,255,255,0.04)'"
-            >
-              <span style="font-size:1.2rem; flex-shrink:0;">
-                {link.icon && (
-                  link.icon.startsWith('http') ? (
-                    <img src={link.icon} alt="" style="width:20px; height:20px; object-fit:contain;" />
-                  ) : (
-                    <span>{link.icon}</span>
-                  )
-                )}
-                {!link.icon && <span>🔗</span>}
-              </span>
-              <span style="flex:1; font-size:0.85rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{link.title}</span>
-              <span style="font-size:0.7rem; color:var(--color-text-muted);">→</span>
-            </a>
-          ))}
+      {bing?.image_url ? (
+        <div class="bing-wallpaper">
+          <img src={bing.image_url} alt={bing.title || 'Bing Wallpaper'} />
+          <div class="bing-caption">{bing.title} · {bing.copyright}</div>
         </div>
       ) : (
-        <p class="empty-state">暂无链接，请后台添加</p>
+        <p class="empty-state">暂无壁纸</p>
       )}
     </div>
   </div>
@@ -419,6 +344,7 @@ function getWeatherEmoji(code: string): string {
     gap: 1.2rem;
     padding: 1.5rem 0;
   }
+
   .dashboard-card {
     --glass-panel-opacity: calc(var(--hero-card-opacity, 14) / 100);
     --glass-panel-blur: var(--hero-card-blur, 18px);
@@ -427,6 +353,7 @@ function getWeatherEmoji(code: string): string {
     flex-direction: column;
     gap: 0.6rem;
   }
+
   .card-header {
     display: flex;
     align-items: center;
@@ -437,52 +364,55 @@ function getWeatherEmoji(code: string): string {
     border-bottom: 1px solid var(--color-border);
     padding-bottom: 0.4rem;
   }
+
   .card-icon { font-size: 1.2rem; }
+
   .time-display { text-align: center; padding: 0.5rem 0; }
   .time-seconds { font-size: 2.8rem; font-weight: 700; font-family: var(--font-mono); letter-spacing: 0.04em; }
   .time-date { font-size: 1rem; color: var(--color-text-muted); margin-top: 0.2rem; }
 
-  .weather-content { display: flex; flex-direction: column; gap: 0.2rem; }
-  .weather-main { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.6rem; }
-  .weather-temp-group { display: flex; align-items: baseline; gap: 0.3rem; }
-  .weather-temp { font-size: 1.6rem; font-weight: 700; }
-  .weather-icon { font-size: 1.2rem; }
-  .weather-desc { font-size: 0.85rem; color: var(--color-text-secondary); }
-  .weather-extras { display: flex; flex-wrap: wrap; gap: 0.2rem 0.6rem; font-size: 0.75rem; color: var(--color-text-muted); }
-  .weather-extended { display: flex; flex-wrap: wrap; gap: 0.2rem 0.6rem; font-size: 0.7rem; color: var(--color-text-muted); }
+  .weather-content { display: flex; flex-direction: column; gap: 0.4rem; }
+  .weather-main { display: flex; align-items: baseline; gap: 0.8rem; }
+  .weather-temp { font-size: 2.2rem; font-weight: 700; }
+  .weather-desc { font-size: 1rem; color: var(--color-text-secondary); }
+  .weather-details { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; font-size: 0.85rem; color: var(--color-text-muted); }
 
   .saying-text {
-    font-size: 1rem;
+    font-size: 1.1rem;
     font-style: italic;
     color: var(--color-text-secondary);
-    padding: 0.3rem 0;
+    padding: 0.5rem 0;
     line-height: 1.6;
     text-align: center;
     margin: 0;
   }
 
   .hot-list { list-style: none; padding: 0; margin: 0; }
-  .hot-list li { padding: 0.3rem 0; border-bottom: 1px solid var(--color-border); }
+  .hot-list li { padding: 0.35rem 0; border-bottom: 1px solid var(--color-border); }
   .hot-list li:last-child { border-bottom: none; }
   .hot-list a { display: flex; align-items: center; gap: 0.6rem; text-decoration: none; color: var(--color-text); }
   .hot-list a:hover { color: var(--color-accent); }
-  .hot-index { font-weight: 700; color: var(--color-text-muted); min-width: 1.6rem; font-size: 0.8rem; }
+  .hot-index { font-weight: 700; color: var(--color-text-muted); min-width: 1.6rem; font-size: 0.85rem; }
   .hot-list li:nth-child(1) .hot-index { color: #f44336; }
   .hot-list li:nth-child(2) .hot-index { color: #ff9800; }
   .hot-list li:nth-child(3) .hot-index { color: #ffc107; }
-  .hot-title { flex: 1; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .hot-value { font-size: 0.7rem; color: var(--color-text-muted); }
+  .hot-title { flex: 1; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hot-value { font-size: 0.75rem; color: var(--color-text-muted); }
 
-  .calendar-content { display: flex; flex-direction: column; gap: 0.4rem; }
-  .progress-item { display: grid; grid-template-columns: 1fr auto; gap: 0.1rem 0.4rem; align-items: center; font-size: 0.85rem; }
+  .calendar-content { display: flex; flex-direction: column; gap: 0.6rem; }
+  .progress-item { display: grid; grid-template-columns: 1fr auto; gap: 0.2rem 0.6rem; align-items: center; font-size: 0.9rem; }
   .progress-item span:first-child { color: var(--color-text-secondary); }
   .progress-item strong { color: var(--color-text); }
-  .progress-bar { grid-column: 1 / 2; height: 5px; background: var(--color-bg-tertiary); border-radius: 999px; overflow: hidden; }
+  .progress-bar { grid-column: 1 / 2; height: 6px; background: var(--color-bg-tertiary); border-radius: 999px; overflow: hidden; }
   .progress-fill { height: 100%; border-radius: 999px; background: var(--color-accent); transition: width 0.3s ease; }
-  .progress-label { font-size: 0.7rem; color: var(--color-text-muted); }
-  .next-holiday { margin-top: 0.3rem; padding: 0.3rem 0.6rem; background: var(--color-accent-soft); border-radius: var(--radius-inner); text-align: center; font-size: 0.85rem; }
+  .progress-label { font-size: 0.75rem; color: var(--color-text-muted); }
+  .next-holiday { margin-top: 0.4rem; padding: 0.5rem 0.8rem; background: var(--color-accent-soft); border-radius: var(--radius-inner); text-align: center; font-size: 0.95rem; }
 
-  .empty-state { color: var(--color-text-muted); font-size: 0.85rem; text-align: center; }
+  .bing-wallpaper { position: relative; border-radius: var(--radius-inner); overflow: hidden; }
+  .bing-wallpaper img { width: 100%; height: 180px; object-fit: cover; display: block; }
+  .bing-caption { position: absolute; bottom: 0; left: 0; right: 0; padding: 0.5rem 1rem; background: linear-gradient(transparent, rgba(0,0,0,0.6)); color: #fff; font-size: 0.8rem; }
+
+  .empty-state { color: var(--color-text-muted); font-size: 0.9rem; text-align: center; }
 
   @media (max-width: 1024px) {
     .dashboard-grid { grid-template-columns: repeat(2, 1fr); }
@@ -521,6 +451,7 @@ function getWeatherEmoji(code: string): string {
     const elapsed = now - start;
     let progressPercent = 0;
     let remainText = '';
+
     if (elapsed <= 0) {
       progressPercent = 0;
       remainText = '0天0时0分0秒';
@@ -536,7 +467,9 @@ function getWeatherEmoji(code: string): string {
       const seconds = Math.floor((diff % (1000 * 60)) / 1000);
       remainText = days + '天' + hours + '时' + minutes + '分' + seconds + '秒';
     }
+
     document.getElementById(remainId).textContent = remainText;
+
     if (updateProgress) {
       const progressRounded = Math.round(progressPercent * 10) / 10;
       document.getElementById(progressId).style.width = progressPercent + '%';
@@ -549,6 +482,7 @@ function getWeatherEmoji(code: string): string {
     updateItem('yearRemain', 'yearProgressFill', 'yearPercent', yearStart, yearEnd, now, updateProgress);
     updateItem('monthRemain', 'monthProgressFill', 'monthPercent', monthStart, monthEnd, now, updateProgress);
     updateItem('weekRemain', 'weekProgressFill', 'weekPercent', weekStart, weekEnd, now, updateProgress);
+
     if (holidayTarget !== null) {
       const diff = holidayTarget - now;
       if (diff > 0) {
@@ -562,7 +496,11 @@ function getWeatherEmoji(code: string): string {
 
   updateClock();
   setInterval(updateClock, 1000);
+
+  // 首次加载同时更新剩余时间和进度条
   updateCountdown(true);
+
+  // 每秒更新剩余时间，进度条仅每小时更新一次
   let lastHour = new Date().getHours();
   setInterval(() => {
     const now = new Date();
