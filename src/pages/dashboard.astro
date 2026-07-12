@@ -249,7 +249,7 @@ function getWeatherEmoji(code: string): string {
       </div>
     </div>
 
-    <!-- 2. 节日倒计时卡片（新增） -->
+    <!-- 2. 节日倒计时卡片 -->
     <div class="dashboard-card glass-panel">
       <div class="card-header">
         <span class="card-icon">🎉</span>
@@ -267,8 +267,8 @@ function getWeatherEmoji(code: string): string {
       )}
     </div>
 
-    <!-- 3. 日历 & 进度 -->
-    <div class="dashboard-card glass-panel" style="grid-column: span 2;">
+    <!-- 3. 日历 & 进度（占1列，去掉 span 2） -->
+    <div class="dashboard-card glass-panel">
       <div class="card-header">
         <span class="card-icon">📅</span>
         <span class="card-title">日历 & 进度</span>
@@ -313,7 +313,7 @@ function getWeatherEmoji(code: string): string {
       <p class="saying-text">“{saying?.text || '加载中...'}”</p>
     </div>
 
-    <!-- 5. 今日天气 -->
+    <!-- 5. 今日天气（占2列） -->
     <div class="dashboard-card glass-panel weather-card" style="grid-column: span 2;">
       <div class="card-header">
         <span class="card-icon">🌤️</span>
@@ -404,7 +404,7 @@ function getWeatherEmoji(code: string): string {
       )}
     </div>
 
-    <!-- 6. 热榜 -->
+    <!-- 6. 热榜（占2列） -->
     <div class="dashboard-card glass-panel" style="grid-column: span 2;">
       <div class="card-header">
         <span class="card-icon">🔥</span>
@@ -427,35 +427,34 @@ function getWeatherEmoji(code: string): string {
       )}
     </div>
 
-    <!-- 7. Links 区域 -->
-    <div class="dashboard-card glass-panel" style="grid-column: span 2;">
+    <!-- 7. Links 区域（占满4列，放在最底部） -->
+    <div class="dashboard-card glass-panel" style="grid-column: 1 / -1;">
       <div class="card-header">
         <span class="card-icon">🔗</span>
-        <span class="card-title">links</span>
+        <span class="card-title">我的小站链接，欢迎到访哦！</span>
       </div>
       {links.length > 0 ? (
-        <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap:0.6rem;">
+        <div class="links-grid">
           {links.map((link) => (
             <a
               href={link.url}
               target="_blank"
               rel="noopener noreferrer"
-              style="display:flex; align-items:center; gap:0.4rem; padding:0.5rem 0.8rem; border-radius:var(--radius-inner); background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); text-decoration:none; color:var(--color-text); transition:background 0.2s;"
-              onmouseover="this.style.background='rgba(255,255,255,0.08)'"
-              onmouseout="this.style.background='rgba(255,255,255,0.04)'"
+              class="link-item"
             >
-              <span style="font-size:1.2rem; flex-shrink:0;">
-                {link.icon && (
+              <div class="link-icon">
+                {link.icon ? (
                   link.icon.startsWith('http') ? (
-                    <img src={link.icon} alt="" style="width:20px; height:20px; object-fit:contain;" />
+                    <img src={link.icon} alt="" />
                   ) : (
                     <span>{link.icon}</span>
                   )
+                ) : (
+                  <span>🔗</span>
                 )}
-                {!link.icon && <span>🔗</span>}
-              </span>
-              <span style="flex:1; font-size:0.85rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{link.title}</span>
-              <span style="font-size:0.7rem; color:var(--color-text-muted);">→</span>
+              </div>
+              <span class="link-title">{link.title}</span>
+              <span class="link-arrow">→</span>
             </a>
           ))}
         </div>
@@ -540,6 +539,72 @@ function getWeatherEmoji(code: string): string {
   .progress-fill { height: 100%; border-radius: 999px; background: var(--color-accent); transition: width 0.3s ease; }
   .progress-label { font-size: 0.7rem; color: var(--color-text-muted); }
   .next-holiday { margin-top: 0.3rem; padding: 0.3rem 0.6rem; background: var(--color-accent-soft); border-radius: var(--radius-inner); text-align: center; font-size: 0.85rem; }
+
+  /* Links 新样式 - 参照 lygalaxy.cn */
+  .links-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.8rem;
+  }
+
+  .link-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.6rem 0.8rem;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    text-decoration: none;
+    color: var(--color-text);
+    transition: all 0.25s ease;
+  }
+
+  .link-item:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(10,132,255,0.25);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  }
+
+  .link-icon {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    border-radius: 6px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.04);
+  }
+
+  .link-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .link-title {
+    flex: 1;
+    font-size: 0.85rem;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .link-arrow {
+    font-size: 0.7rem;
+    color: var(--color-text-muted);
+    transition: transform 0.2s;
+  }
+
+  .link-item:hover .link-arrow {
+    transform: translateX(4px);
+    color: var(--color-accent);
+  }
 
   .empty-state { color: var(--color-text-muted); font-size: 0.85rem; text-align: center; }
 

@@ -16,6 +16,7 @@ import { publicAnalyticsRoutes } from "./routes/public-analytics";
 import { toolsRoutes } from "./routes/tools";
 import { webmentionRoutes } from "./routes/webmention";
 import { dashboardLinksRoutes } from "./routes/dashboard-links";
+import { dashboardAdminRoutes } from "./routes/dashboard-admin";
 
 const app = new Hono<AdminAppEnv>();
 
@@ -96,6 +97,7 @@ app.route("/admin/notes", notesRoutes);
 app.route("/friend-links", friendLinksRoutes);
 app.route("/webmention", webmentionRoutes);
 app.route("/admin/dashboard-links", dashboardLinksRoutes);
+app.route("/admin/dashboard-admin", dashboardAdminRoutes);
 
 app.get("/health", (c) =>
 	c.json({ status: "ok", timestamp: new Date().toISOString() }),

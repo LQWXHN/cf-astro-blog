@@ -425,16 +425,14 @@ export type NewMcpAuditLog = typeof mcpAuditLogs.$inferInsert;
 
 export type LoginAttempt = typeof loginAttempts.$inferSelect;
 
-// ===== 追加在文件末尾，原有内容不变 =====
-
-// ─── 仪表盘链接表 ─────────────────────────────────────────────────────────────
+// ===== 仪表盘链接表 ─────────────────────────────────────────────────────────────
 
 export const dashboardLinks = sqliteTable(
   "dashboard_links",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
     title: text("title").notNull(),
-    icon: text("icon"), // 图标 URL 或 Iconify 图标名（如 "mdi:home"）
+    icon: text("icon"),
     url: text("url").notNull(),
     sortOrder: integer("sort_order").default(0),
     createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
@@ -447,3 +445,72 @@ export const dashboardLinks = sqliteTable(
 
 export type DashboardLink = typeof dashboardLinks.$inferSelect;
 export type NewDashboardLink = typeof dashboardLinks.$inferInsert;
+
+// ===== 仪表盘卡片定义表 =====
+export const dashboardCards = sqliteTable(
+  "dashboard_cards",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    cardKey: text("card_key").notNull().unique(),
+    title: text("title").notNull(),
+    icon: text("icon"),
+    type: text("type").notNull().default("custom"), // system / custom
+    contentTemplate: text("content_template"),
+    sizePreset: text("size_preset").notNull().default("small"), // small / medium / large / xlarge / custom
+    width: integer("width").default(1),
+    height: integer("height").default(1),
+    apiProviderId: integer("api_provider_id"),
+    apiEndpoint: text("api_endpoint"),
+    apiKey: text("api_key"),
+    refreshInterval: integer("refresh_interval").default(0),
+    sortOrder: integer("sort_order").default(0),
+    isEnabled: integer("is_enabled", { mode: "boolean" }).default(true),
+    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    index("dashboard_cards_key_idx").on(table.cardKey),
+    index("dashboard_cards_type_idx").on(table.type),
+  ],
+);
+
+// ===== API提供商表 =====
+export const apiProviders = sqliteTable(
+  "api_providers",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    name: text("name").notNull().unique(),
+    baseUrl: text("base_url").notNull(),
+    apiKey: text("api_key"),
+    authType: text("auth_type").notNull().default("bearer"),
+    headerName: text("header_name").default("Authorization"),
+    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    index("api_providers_name_idx").on(table.name),
+  ],
+);
+
+// ===== 仪表盘布局表 =====
+export const dashboardLayouts = sqliteTable(
+  "dashboard_layouts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    name: text("name").notNull(),
+    layoutData: text("layout_data").notNull(),
+    isDefault: integer("is_default", { mode: "boolean" }).default(false),
+    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    index("dashboard_layouts_default_idx").on(table.isDefault),
+  ],
+);
+
+export type DashboardCard = typeof dashboardCards.$inferSelect;
+export type NewDashboardCard = typeof dashboardCards.$inferInsert;
+export type ApiProvider = typeof apiProviders.$inferSelect;
+export type NewApiProvider = typeof apiProviders.$inferInsert;
+export type DashboardLayout = typeof dashboardLayouts.$inferSelect;
+export type NewDashboardLayout = typeof dashboardLayouts.$inferInsert;

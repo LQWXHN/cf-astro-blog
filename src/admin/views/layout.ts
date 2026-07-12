@@ -13,7 +13,8 @@ type AdminNavKey =
 	| "media"
 	| "analytics"
 	| "tools"
-	| "dashboard-links";
+	| "dashboard-links"
+	| "dashboard-admin";
 
 const navItems: Array<{ key: AdminNavKey; label: string; href: string }> = [
 	{ key: "dashboard", label: "控制台", href: "/api/admin" },
@@ -22,6 +23,7 @@ const navItems: Array<{ key: AdminNavKey; label: string; href: string }> = [
 	{ key: "media", label: "媒体", href: "/api/admin/media" },
 	{ key: "tools", label: "工具箱", href: "/api/admin/tools" }, 
 	{ key: "notes", label: "便签墙", href: "/api/admin/notes" },
+	{ key: "dashboard-admin", label: "仪表盘", href: "/api/admin/dashboard-admin" },
 	{ key: "dashboard-links", label: "仪表盘链接", href: "/api/admin/dashboard-links" },
 	{ key: "friends", label: "友链", href: "/api/admin/friends" },
 	{ key: "mentions", label: "提及", href: "/api/admin/mentions" },
@@ -1552,8 +1554,9 @@ function resolveActiveNav(title: string): AdminNavKey {
 	if (title.includes("媒体")) return "media";
 	if (title.includes("统计")) return "analytics";
 	if (title.includes("工具箱")) return "tools"; // 🆕 匹配工具箱
-	if (title.includes("仪表盘链接") || title.includes("链接管理")) return "dashboard-links";
-	return "dashboard";
+	if (title.includes("仪表盘链接") || title.includes("链接管理")) return "dashboard-links"
+	if (title.includes("仪表盘管理") || (title.includes("仪表盘") && !title.includes("链接")))
+	return "dashboard-admin";
 }
 
 function renderNav(title: string): string {
