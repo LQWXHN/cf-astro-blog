@@ -1,8 +1,9 @@
 ---
 import { env } from "cloudflare:workers";
 import Base from "@/layouts/Base.astro";
-import { dashboardCards, dashboardLinks, apiProviders } from "@/db/schema";
+import { dashboardCards, dashboardLinks } from "@/db/schema";
 import { getDb } from "@/lib/db";
+import { asc, eq } from "drizzle-orm";   // 确保导入 asc 和 eq
 
 // ===== 配置区 =====
 const UAPI_KEY = "uapi-nwvozms5PJdxLNRw3TJUSQ4nmP_54yHVi9XzIrXX";
@@ -29,7 +30,7 @@ const indexMap: Record<string, string> = {
   pollen: '花粉',
 };
 
-// ===== 通过 UAPI IPinfo 获取精确地理位置（精确到区县） =====
+// ===== 通过 UAPI IPinfo 获取精确地理位置 =====
 async function fetchLocationByIP() {
   try {
     const controller = new AbortController();
@@ -64,7 +65,7 @@ async function fetchLocationByIP() {
   }
 }
 
-// ===== 获取完整天气数据 =====
+// ===== 获取天气数据 =====
 async function fetchWeather(location: string) {
   try {
     const controller = new AbortController();
@@ -123,7 +124,7 @@ async function fetchHoliday() {
   }
 }
 
-// ===== 获取一言（每日更新） =====
+// ===== 获取一言 =====
 async function fetchSaying(env: any) {
   try {
     const today = new Date().toISOString().slice(0, 10);
@@ -167,7 +168,6 @@ function getDateProgress() {
   const monthElapsed = now.getTime() - monthStart.getTime();
   const monthProgress = (monthElapsed / monthTotal) * 100;
 
-  // 周进度（以周一为第一天，结束于本周日 23:59:59）
   const dayOfWeek = now.getDay() || 7;
   const weekStart = new Date(now);
   weekStart.setDate(now.getDate() - (dayOfWeek - 1));
@@ -217,21 +217,31 @@ function getWeatherEmoji(code: string): string {
 // ===== 获取数据 =====
 const location = await fetchLocationByIP();
 const db = getDb(env.DB);
+let cards: any[] = [];
+let links: any[] = [];
 
-// 获取所有启用的卡片
-const cards = await db
-  .select()
-  .from(dashboardCards)
-  .where(eq(dashboardCards.isEnabled, 1))
-  .orderBy(asc(dashboardCards.sortOrder));
+try {
+  cards = await db
+    .select()
+    .from(dashboardCards)
+    .where(eq(dashboardCards.isEnabled, 1))
+    .orderBy(asc(dashboardCards.sortOrder));
+} catch (error) {
+  console.error("Failed to fetch dashboard cards:", error);
+  cards = [];
+}
 
-// 获取 Links 数据（用于 links 卡片）
-const links = await db
-  .select()
-  .from(dashboardLinks)
-  .orderBy(dashboardLinks.sortOrder);
+try {
+  links = await db
+    .select()
+    .from(dashboardLinks)
+    .orderBy(dashboardLinks.sortOrder);
+} catch (error) {
+  console.error("Failed to fetch dashboard links:", error);
+  links = [];
+}
 
-// 并行获取系统卡片需要的外部数据
+// 并行获取外部数据（即使失败也不影响页面加载）
 const [weather, hotboard, holiday, saying] = await Promise.all([
   fetchWeather(location),
   fetchHotboard(),
@@ -253,13 +263,13 @@ const scriptData = {
   holidayTarget: holidayTarget,
 };
 
-// ===== 系统卡片渲染函数 =====
+// ===== 卡片渲染函数（带容错） =====
 function renderTimeCard(card: any) {
   return `
     <div class="dashboard-card glass-panel">
       <div class="card-header">
         <span class="card-icon">${card.icon || '🕐'}</span>
-        <span class="card-title">${card.title}</span>
+        <span class="card-title">${card.title || '北京时间'}</span>
       </div>
       <div class="time-display">
         <div class="time-seconds" id="timeDisplay">
@@ -276,7 +286,7 @@ function renderHolidayCard(card: any) {
     <div class="dashboard-card glass-panel">
       <div class="card-header">
         <span class="card-icon">${card.icon || '🎉'}</span>
-        <span class="card-title">${card.title}</span>
+        <span class="card-title">${card.title || '下一个传统节日'}</span>
       </div>
       ${nextHoliday ? `
         <div class="holiday-content">
@@ -295,7 +305,7 @@ function renderProgressCard(card: any) {
     <div class="dashboard-card glass-panel">
       <div class="card-header">
         <span class="card-icon">${card.icon || '📅'}</span>
-        <span class="card-title">${card.title}</span>
+        <span class="card-title">${card.title || '日历 & 进度'}</span>
       </div>
       <div class="calendar-content">
         <div class="progress-item">
@@ -334,7 +344,7 @@ function renderSayingCard(card: any) {
     <div class="dashboard-card glass-panel">
       <div class="card-header">
         <span class="card-icon">${card.icon || '💬'}</span>
-        <span class="card-title">${card.title}</span>
+        <span class="card-title">${card.title || '今日一言'}</span>
       </div>
       <p class="saying-text">“${saying?.text || '加载中...'}”</p>
     </div>
@@ -346,7 +356,7 @@ function renderWeatherCard(card: any) {
     <div class="dashboard-card glass-panel weather-card">
       <div class="card-header">
         <span class="card-icon">${card.icon || '🌤️'}</span>
-        <span class="card-title">${card.title} · ${location}</span>
+        <span class="card-title">${card.title || '今日天气'} · ${location}</span>
       </div>
       ${weather ? `
         <div class="weather-content">
@@ -425,7 +435,7 @@ function renderHotboardCard(card: any) {
     <div class="dashboard-card glass-panel">
       <div class="card-header">
         <span class="card-icon">${card.icon || '🔥'}</span>
-        <span class="card-title">${card.title}</span>
+        <span class="card-title">${card.title || '微博热榜'}</span>
       </div>
       ${hotboard?.list ? `
         <ol class="hot-list">
@@ -449,7 +459,7 @@ function renderLinksCard(card: any) {
     <div class="dashboard-card glass-panel">
       <div class="card-header">
         <span class="card-icon">${card.icon || '🔗'}</span>
-        <span class="card-title">${card.title}</span>
+        <span class="card-title">${card.title || '我的小站链接，欢迎到访哦！'}</span>
       </div>
       ${links.length > 0 ? `
         <div class="links-grid">
@@ -473,7 +483,6 @@ function renderLinksCard(card: any) {
   `;
 }
 
-// ===== 获取卡片列数 =====
 function getCardColumns(card: any): number {
   if (card.sizePreset === 'small') return 1;
   if (card.sizePreset === 'medium') return 2;
@@ -483,46 +492,47 @@ function getCardColumns(card: any): number {
   return 1;
 }
 
-// ===== 渲染单个卡片 =====
 function renderCard(card: any): string {
-  const columns = getCardColumns(card);
-  const spanStyle = `style="grid-column: span ${columns};"`;
-  let content = '';
+  try {
+    const columns = getCardColumns(card);
+    const spanStyle = `style="grid-column: span ${columns};"`;
+    let content = '';
 
-  switch (card.cardKey) {
-    case 'time': content = renderTimeCard(card); break;
-    case 'holiday': content = renderHolidayCard(card); break;
-    case 'progress': content = renderProgressCard(card); break;
-    case 'saying': content = renderSayingCard(card); break;
-    case 'weather': content = renderWeatherCard(card); break;
-    case 'hotboard': content = renderHotboardCard(card); break;
-    case 'links': content = renderLinksCard(card); break;
-    default:
-      // 自定义卡片：使用 content_template，替换占位符（未来可扩展 API 数据）
-      const template = card.contentTemplate || '<p class="empty-state">自定义卡片内容为空</p>';
-      // 简单替换 {{data.title}} 等
-      const rendered = template
-        .replace(/\{\{data\.title\}\}/g, card.title)
-        .replace(/\{\{data\.icon\}\}/g, card.icon || '');
-      content = `
-        <div class="dashboard-card glass-panel">
-          <div class="card-header">
-            <span class="card-icon">${card.icon || '📦'}</span>
-            <span class="card-title">${card.title}</span>
+    switch (card.cardKey) {
+      case 'time': content = renderTimeCard(card); break;
+      case 'holiday': content = renderHolidayCard(card); break;
+      case 'progress': content = renderProgressCard(card); break;
+      case 'saying': content = renderSayingCard(card); break;
+      case 'weather': content = renderWeatherCard(card); break;
+      case 'hotboard': content = renderHotboardCard(card); break;
+      case 'links': content = renderLinksCard(card); break;
+      default:
+        // 自定义卡片
+        const template = card.contentTemplate || '<p class="empty-state">自定义卡片内容为空</p>';
+        const rendered = template
+          .replace(/\{\{data\.title\}\}/g, card.title || '')
+          .replace(/\{\{data\.icon\}\}/g, card.icon || '');
+        content = `
+          <div class="dashboard-card glass-panel">
+            <div class="card-header">
+              <span class="card-icon">${card.icon || '📦'}</span>
+              <span class="card-title">${card.title || '自定义卡片'}</span>
+            </div>
+            ${rendered}
           </div>
-          ${rendered}
-        </div>
-      `;
+        `;
+    }
+    return `<div ${spanStyle}>${content}</div>`;
+  } catch (error) {
+    console.error("Error rendering card:", card.cardKey, error);
+    return `<div style="grid-column: span 1;"><div class="dashboard-card glass-panel"><p class="empty-state">卡片渲染出错</p></div></div>`;
   }
-
-  // 包裹在 grid 容器中
-  return `<div ${spanStyle}>${content}</div>`;
 }
 ---
 
 <Base title="仪表盘" description="信息聚合中心">
   <div class="dashboard-grid">
-    ${cards.map(card => renderCard(card)).join('')}
+    ${cards.length > 0 ? cards.map(card => renderCard(card)).join('') : '<p class="empty-state" style="grid-column: 1 / -1; text-align:center; padding:2rem;">暂无卡片，请后台添加</p>'}
   </div>
 </Base>
 
