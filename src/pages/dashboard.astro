@@ -48,31 +48,6 @@ async function fetchWeather(location: string) {
   }
 }
 
-// ===== 获取历史天气（兼容多种返回结构） =====
-async function fetchWeatherHistory(location: string) {
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
-    const res = await fetch(
-      `https://uapis.cn/api/v1/misc/weather/history?city=${encodeURIComponent(location)}&days=7&lang=zh`,
-      {
-        headers: { Authorization: `Bearer ${UAPI_KEY}` },
-        signal: controller.signal,
-      }
-    );
-    clearTimeout(timeoutId);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    // 兼容多种返回格式：data.days 或 data.list
-    if (data && !data.days && data.list) {
-      data.days = data.list;
-    }
-    return data;
-  } catch {
-    return null;
-  }
-}
-
 // ===== 获取热榜 =====
 async function fetchHotboard() {
   try {
@@ -112,9 +87,17 @@ async function fetchHoliday() {
   }
 }
 
-// ===== 获取一言 =====
-async function fetchSaying() {
+// ===== 获取一言（每日更新） =====
+async function fetchSaying(env: any) {
   try {
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    // 尝试从 KV 获取今天的一言
+    const stored = await env.SESSION?.get('saying_today', 'json');
+    if (stored && stored.date === today && stored.text) {
+      return { text: stored.text };
+    }
+
+    // KV 中没有或过期，请求新的一言
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
     const res = await fetch(`https://uapis.cn/api/v1/saying`, {
@@ -122,7 +105,16 @@ async function fetchSaying() {
     });
     clearTimeout(timeoutId);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+    const data = await res.json();
+    if (data && data.text) {
+      // 存入 KV，有效期设为 24 小时（或次日自动过期）
+      await env.SESSION?.put('saying_today', JSON.stringify({
+        date: today,
+        text: data.text
+      }), { expirationTtl: 86400 }); // 24 小时
+      return { text: data.text };
+    }
+    return null;
   } catch {
     return null;
   }
@@ -195,12 +187,11 @@ function getDateProgress() {
 
 // ===== 主流程 =====
 const location = await fetchLocationByIP();
-const [weather, weatherHistory, hotboard, holiday, saying, bing] = await Promise.all([
+const [weather, hotboard, holiday, saying, bing] = await Promise.all([
   fetchWeather(location),
-  fetchWeatherHistory(location),
   fetchHotboard(),
   fetchHoliday(),
-  fetchSaying(),
+  fetchSaying(env),
   fetchBingWallpaper(),
 ]);
 
@@ -218,9 +209,6 @@ const scriptData = {
   weekEnd: progress.weekEnd,
   holidayTarget: holidayTarget,
 };
-
-// 判断历史天气是否有数据
-const hasWeatherHistory = weatherHistory?.days && weatherHistory.days.length > 0;
 ---
 
 <Base title="仪表盘" description="信息聚合中心">
@@ -262,30 +250,13 @@ const hasWeatherHistory = weatherHistory?.days && weatherHistory.days.length > 0
       )}
     </div>
 
-    <!-- 3. 历史天气 -->
+    <!-- 3. 今日一言（替换原来的近7天天气） -->
     <div class="dashboard-card glass-panel">
       <div class="card-header">
-        <span class="card-icon">📊</span>
-        <span class="card-title">近7天天气 · {location}</span>
+        <span class="card-icon">💬</span>
+        <span class="card-title">今日一言</span>
       </div>
-      {hasWeatherHistory ? (
-        <div class="history-chart">
-          {weatherHistory.days.map((d: any) => (
-            <div
-              class="history-bar"
-              title={`${d.date}: ${d.weather} ${d.temp_max}°C`}
-            >
-              <div
-                class="bar"
-                style="height: ${(d.temp_max / 40) * 100}%; background: ${d.rained ? '#4a9eff' : '#ffb74d'};"
-              ></div>
-              <span class="bar-label">${d.date.slice(5)}</span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p class="empty-state">暂无历史天气数据</p>
-      )}
+      <p class="saying-text">“{saying?.text || '加载中...'}”</p>
     </div>
 
     <!-- 4. 热榜 -->
@@ -348,16 +319,7 @@ const hasWeatherHistory = weatherHistory?.days && weatherHistory.days.length > 0
       </div>
     </div>
 
-    <!-- 6. 一言 -->
-    <div class="dashboard-card glass-panel">
-      <div class="card-header">
-        <span class="card-icon">💬</span>
-        <span class="card-title">今日一言</span>
-      </div>
-      <p class="saying-text">“{saying?.text || '加载中...'}”</p>
-    </div>
-
-    <!-- 7. 必应壁纸 -->
+    <!-- 6. 必应壁纸（占两列） -->
     <div class="dashboard-card glass-panel" style="grid-column: span 2;">
       <div class="card-header">
         <span class="card-icon">🖼️</span>
@@ -415,10 +377,15 @@ const hasWeatherHistory = weatherHistory?.days && weatherHistory.days.length > 0
   .weather-desc { font-size: 1rem; color: var(--color-text-secondary); }
   .weather-details { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; font-size: 0.85rem; color: var(--color-text-muted); }
 
-  .history-chart { display: flex; align-items: flex-end; gap: 0.4rem; height: 80px; padding-top: 0.5rem; }
-  .history-bar { display: flex; flex-direction: column; align-items: center; flex: 1; height: 100%; }
-  .history-bar .bar { width: 100%; min-height: 4px; border-radius: 4px 4px 0 0; transition: height 0.3s; }
-  .history-bar .bar-label { font-size: 0.6rem; color: var(--color-text-muted); margin-top: 0.2rem; }
+  .saying-text {
+    font-size: 1.1rem;
+    font-style: italic;
+    color: var(--color-text-secondary);
+    padding: 0.5rem 0;
+    line-height: 1.6;
+    text-align: center;
+    margin: 0;
+  }
 
   .hot-list { list-style: none; padding: 0; margin: 0; }
   .hot-list li { padding: 0.35rem 0; border-bottom: 1px solid var(--color-border); }
@@ -441,11 +408,11 @@ const hasWeatherHistory = weatherHistory?.days && weatherHistory.days.length > 0
   .progress-label { font-size: 0.75rem; color: var(--color-text-muted); }
   .next-holiday { margin-top: 0.4rem; padding: 0.5rem 0.8rem; background: var(--color-accent-soft); border-radius: var(--radius-inner); text-align: center; font-size: 0.95rem; }
 
-  .saying-text { font-size: 1.1rem; font-style: italic; color: var(--color-text-secondary); padding: 0.5rem 0; line-height: 1.6; text-align: center; }
-
   .bing-wallpaper { position: relative; border-radius: var(--radius-inner); overflow: hidden; }
   .bing-wallpaper img { width: 100%; height: 180px; object-fit: cover; display: block; }
   .bing-caption { position: absolute; bottom: 0; left: 0; right: 0; padding: 0.5rem 1rem; background: linear-gradient(transparent, rgba(0,0,0,0.6)); color: #fff; font-size: 0.8rem; }
+
+  .empty-state { color: var(--color-text-muted); font-size: 0.9rem; text-align: center; }
 
   @media (max-width: 1024px) {
     .dashboard-grid { grid-template-columns: repeat(2, 1fr); }
