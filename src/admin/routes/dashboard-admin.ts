@@ -96,6 +96,7 @@ dashboardAdmin.get("/cards/new", async (c) => {
           <option value="custom">自定义</option>
           <option value="system">系统（保留现有卡片）</option>
         </select>
+        <p class="form-help">系统卡片为内置固定卡片（如时间、天气），不可删除；自定义卡片可完全自由编辑内容。</p>
       </div>
       <div class="form-group">
         <label for="size_preset">大小预设</label>
@@ -106,13 +107,15 @@ dashboardAdmin.get("/cards/new", async (c) => {
           <option value="xlarge">超大 (4列)</option>
           <option value="custom">自定义</option>
         </select>
+        <p class="form-help">预设大小对应网格列数（1-4列），选择“自定义”后可手动设置列数和行数。</p>
       </div>
       <div class="form-group" id="customSizeGroup" style="display:none;">
         <label>自定义大小</label>
         <div style="display:flex; gap:1rem;">
-          <input type="number" name="width" placeholder="列数 (1-4)" class="form-input" style="width:100px;" />
-          <input type="number" name="height" placeholder="行数 (1-4)" class="form-input" style="width:100px;" />
+          <input type="number" name="width" placeholder="列数 (1-4)" class="form-input" style="width:100px;" min="1" max="4" />
+          <input type="number" name="height" placeholder="行数 (1-4)" class="form-input" style="width:100px;" min="1" max="4" />
         </div>
+        <p class="form-help">列数和行数均需在 1~4 之间。</p>
       </div>
       <div class="form-group">
         <label for="content_template">内容模板（HTML代码）</label>
@@ -224,6 +227,7 @@ dashboardAdmin.get("/cards/:id/edit", async (c) => {
           <option value="custom" ${card.type === 'custom' ? 'selected' : ''}>自定义</option>
         </select>
         <input type="hidden" name="type" value="${card.type}" />
+        <p class="form-help">系统卡片为内置固定卡片，不可修改类型；自定义卡片可自由编辑内容。</p>
       </div>
       <div class="form-group">
         <label for="size_preset">大小预设</label>
@@ -234,13 +238,15 @@ dashboardAdmin.get("/cards/:id/edit", async (c) => {
           <option value="xlarge" ${card.sizePreset === 'xlarge' ? 'selected' : ''}>超大 (4列)</option>
           <option value="custom" ${card.sizePreset === 'custom' ? 'selected' : ''}>自定义</option>
         </select>
+        <p class="form-help">预设大小对应网格列数（1-4列），选择“自定义”后可手动设置列数和行数。</p>
       </div>
       <div class="form-group" id="customSizeGroup" style="${card.sizePreset === 'custom' ? 'display:block;' : 'display:none;'}">
         <label>自定义大小</label>
         <div style="display:flex; gap:1rem;">
-          <input type="number" name="width" placeholder="列数 (1-4)" class="form-input" style="width:100px;" value="${card.width}" />
-          <input type="number" name="height" placeholder="行数 (1-4)" class="form-input" style="width:100px;" value="${card.height}" />
+          <input type="number" name="width" placeholder="列数 (1-4)" class="form-input" style="width:100px;" min="1" max="4" value="${card.width}" />
+          <input type="number" name="height" placeholder="行数 (1-4)" class="form-input" style="width:100px;" min="1" max="4" value="${card.height}" />
         </div>
+        <p class="form-help">列数和行数均需在 1~4 之间。</p>
       </div>
       <div class="form-group">
         <label for="content_template">内容模板（HTML代码）</label>
