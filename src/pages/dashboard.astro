@@ -31,6 +31,7 @@ const indexMap: Record<string, string> = {
 };
 
 // ===== 通过 UAPI IPinfo 获取精确地理位置 =====
+// ===== 通过 UAPI IPinfo 获取精确地理位置（精确到区县） =====
 async function fetchLocationByIP() {
   try {
     const controller = new AbortController();
@@ -41,13 +42,17 @@ async function fetchLocationByIP() {
     clearTimeout(timeoutId);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
+    console.log("IPinfo 返回数据:", JSON.stringify(data, null, 2)); // 在 Cloudflare 日志中查看
+
     if (data && data.ret === 200 && data.data) {
-      const { district, city, region } = data.data;
-      if (district && district !== "未知" && district !== "None" && district !== "") {
+      const { district, city, region, area, county } = data.data;
+      // 尝试多个可能的区县字段
+      const location = district || area || county;
+      if (location && location !== "未知" && location !== "None" && location !== "") {
         if (city && city !== "未知" && city !== "None" && city !== "") {
-          return `${city}${district}`;
+          return `${city}${location}`;
         }
-        return district;
+        return location;
       }
       if (city && city !== "未知" && city !== "None" && city !== "") {
         return city;
