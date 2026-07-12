@@ -16,15 +16,18 @@ function isInternalHref(href: string) {
 }
 
 function isLinkActive(href: string) {
-	if (!isInternalHref(href)) {
-		return false;
-	}
-
-	if (href === "/") {
-		return currentPath === "/";
-	}
-
-	return currentPath === href || currentPath.startsWith(`${href}/`);
+	if (!isInternalHref(href)) return false;
+	
+	// 精确匹配
+	if (currentPath === href) return true;
+	
+	// 特殊处理 / 根路径
+	if (href === "/" && currentPath === "/") return true;
+	
+	// 处理动态路径（如 /blog/xxx, /notes 等）
+	if (href !== "/" && currentPath.startsWith(href)) return true;
+	
+	return false;
 }
 ---
 
@@ -311,11 +314,6 @@ function isLinkActive(href: string) {
 	}
 
 	:global(html[data-nav-condensed]) .site-nav::before {
-		/*
-		 * --nav-shell-condensed-computed-inset 由 JS 动态设置：
-		 * 内容超出默认 1060px 胶囊时扩展，保证所有导航项可见；
-		 * 未设置时降级到原始公式。
-		 */
 		inset-inline: var(
 			--nav-shell-condensed-computed-inset,
 			max(
@@ -479,9 +477,6 @@ function isLinkActive(href: string) {
 		}
 	}
 
-	/* 主题切换动画期间，View Transition 的截图层会阻断 backdrop-filter 采样，
-	 * 导致导航栏的磨玻璃背景变透明并透出下方内容。
-	 * 在切换过渡期间改用不透明的背景色兜底，视觉上保持导航栏不透明。 */
 	:global([data-theme-switching]) .site-nav::before {
 		background: var(--color-bg);
 		transition: none;
