@@ -523,9 +523,8 @@ function renderCard(card: any): string {
 ---
 
 <Base title="仪表盘" description="信息聚合中心">
-  <div class="dashboard-grid">
-  {@html cards.length > 0 ? cards.map(card => renderCard(card)).join('') : '<p class="empty-state">暂无卡片</p>'}
-  </div>
+  <!-- 关键修复：使用 set:html 注入卡片 HTML，避免 {@html} 解析错误 -->
+  <div class="dashboard-grid" set:html={cards.length > 0 ? cards.map(card => renderCard(card)).join('') : '<p class="empty-state" style="grid-column: 1 / -1; text-align:center; padding:2rem;">暂无卡片，请后台添加</p>'} />
 </Base>
 
 <style>
