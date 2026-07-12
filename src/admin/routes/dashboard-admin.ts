@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { asc, desc, eq } from "drizzle-orm";
-import { dashboardCards, dashboardLayouts, apiProviders, dashboardLinks } from "@/db/schema";
+import { dashboardCards, dashboardLinks } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { escapeAttribute, escapeHtml } from "@/lib/security";
 import {
@@ -15,39 +15,30 @@ import { adminLayout } from "../views/layout";
 const dashboardAdmin = new Hono<AdminAppEnv>();
 dashboardAdmin.use("*", requireAuth);
 
-// ============ 仪表盘管理首页（整合卡片 + 链接） ============
+// ============ 仪表盘管理首页（卡片 + 链接） ============
 dashboardAdmin.get("/", async (c) => {
   const session = getAuthenticatedSession(c);
   const db = getDb(c.env.DB);
 
-  // 获取卡片列表
   const cards = await db.select().from(dashboardCards).orderBy(asc(dashboardCards.sortOrder));
-  // 获取链接列表
   const links = await db.select().from(dashboardLinks).orderBy(asc(dashboardLinks.sortOrder));
-  const layouts = await db.select().from(dashboardLayouts).orderBy(asc(dashboardLayouts.name));
-  const providers = await db.select().from(apiProviders);
 
-  // 卡片表格
   const cardsRows = cards.map(card => `
     <tr>
       <td>${card.icon || '—'}</td>
       <td>${escapeHtml(card.title)}</td>
-      <td><span class="badge ${card.type === 'system' ? 'badge-published' : 'badge-draft'}">${card.type === 'system' ? '系统' : '自定义'}</span></td>
       <td>${card.sizePreset}</td>
       <td>${card.isEnabled ? '✅' : '❌'}</td>
       <td>
         <a href="/api/admin/dashboard-admin/cards/${card.id}/edit" class="btn btn-sm">编辑</a>
-        ${card.type !== 'system' ? `
-          <form method="post" action="/api/admin/dashboard-admin/cards/${card.id}/delete" style="display:inline;">
-            <input type="hidden" name="_csrf" value="${escapeAttribute(session.csrfToken)}" />
-            <button type="submit" class="btn btn-sm btn-danger">删除</button>
-          </form>
-        ` : '<span style="color:var(--text-muted);font-size:0.7rem;">系统不可删</span>'}
+        <form method="post" action="/api/admin/dashboard-admin/cards/${card.id}/delete" style="display:inline;">
+          <input type="hidden" name="_csrf" value="${escapeAttribute(session.csrfToken)}" />
+          <button type="submit" class="btn btn-sm btn-danger">删除</button>
+        </form>
       </td>
     </tr>
   `).join('');
 
-  // 链接表格
   const linksRows = links.length > 0 ? links.map(link => `
     <tr>
       <td>${link.icon ? (link.icon.startsWith('http') ? `<img src="${escapeAttribute(link.icon)}" style="width:24px;height:24px;object-fit:contain;border-radius:4px;" />` : `<span style="font-size:1.2rem;">${escapeHtml(link.icon)}</span>`) : '—'}</td>
@@ -70,25 +61,22 @@ dashboardAdmin.get("/", async (c) => {
       <div style="display:flex; gap:0.5rem;">
         <a href="/api/admin/dashboard-admin/cards/new" class="btn btn-primary">新建卡片</a>
         <a href="/api/admin/dashboard-admin/layout/edit" class="btn">编辑布局</a>
-        <a href="/api/admin/dashboard-admin/providers" class="btn">API管理</a>
         <a href="/api/admin/dashboard-links/new" class="btn">新建链接</a>
       </div>
     </div>
 
-    <!-- 卡片管理 -->
     <h2>卡片管理</h2>
     <div class="table-card">
       <table class="data-table">
         <thead><tr>
-          <th>图标</th><th>标题</th><th>类型</th><th>大小</th><th>状态</th><th>操作</th>
+          <th>图标</th><th>标题</th><th>大小</th><th>状态</th><th>操作</th>
         </tr></thead>
         <tbody>
-          ${cardsRows || `<tr><td colspan="6" class="empty-state">暂无卡片</td></tr>`}
+          ${cardsRows || `<tr><td colspan="5" class="empty-state">暂无卡片</td></tr>`}
         </tbody>
       </table>
     </div>
 
-    <!-- 链接管理 -->
     <h2 style="margin-top:2rem;">链接管理</h2>
     <div class="table-card">
       <table class="data-table">
@@ -105,16 +93,9 @@ dashboardAdmin.get("/", async (c) => {
   return c.html(adminLayout("仪表盘管理", content, { csrfToken: session.csrfToken }));
 });
 
-// ============ 新建卡片 ============
+// ============ 新建卡片（简化版：无类型、无API） ============
 dashboardAdmin.get("/cards/new", async (c) => {
   const session = getAuthenticatedSession(c);
-  const db = getDb(c.env.DB);
-  const providers = await db.select().from(apiProviders);
-
-  const providerOptions = providers.map(p =>
-    `<option value="${p.id}">${escapeHtml(p.name)}</option>`
-  ).join('');
-
   const content = `
     <h1>新建卡片</h1>
     <form method="post" action="/api/admin/dashboard-admin/cards" class="form">
@@ -128,14 +109,6 @@ dashboardAdmin.get("/cards/new", async (c) => {
         <input type="text" id="icon" name="icon" class="form-input" placeholder="🕐 或 mdi:clock" />
       </div>
       <div class="form-group">
-        <label for="type">卡片类型</label>
-        <select id="type" name="type" class="form-select">
-          <option value="custom">自定义</option>
-          <option value="system">系统（保留现有卡片）</option>
-        </select>
-        <p class="form-help">系统卡片为内置固定卡片（如时间、天气），不可删除；自定义卡片可完全自由编辑内容。</p>
-      </div>
-      <div class="form-group">
         <label for="size_preset">大小预设</label>
         <select id="size_preset" name="size_preset" class="form-select">
           <option value="small">小 (1列)</option>
@@ -144,7 +117,7 @@ dashboardAdmin.get("/cards/new", async (c) => {
           <option value="xlarge">超大 (4列)</option>
           <option value="custom">自定义</option>
         </select>
-        <p class="form-help">预设大小对应网格列数（1-4列），选择“自定义”后可手动设置列数和行数。</p>
+        <p class="form-help">预设大小对应网格列数（1-4列），选择"自定义"后可手动设置列数和行数。</p>
       </div>
       <div class="form-group" id="customSizeGroup" style="display:none;">
         <label>自定义大小</label>
@@ -156,23 +129,8 @@ dashboardAdmin.get("/cards/new", async (c) => {
       </div>
       <div class="form-group">
         <label for="content_template">内容模板（HTML代码）</label>
-        <textarea id="content_template" name="content_template" class="form-textarea" rows="10" placeholder="<div>自定义内容，可用 {{data.xxx}} 注入数据</div>"></textarea>
-        <p class="form-help">支持 HTML + CSS + 模板变量。可用变量：<code>{{data.title}}</code>、<code>{{data.value}}</code>、<code>{{apiResponse}}</code></p>
-      </div>
-      <div class="form-group">
-        <label for="api_provider_id">关联API提供商（可选）</label>
-        <select id="api_provider_id" name="api_provider_id" class="form-select">
-          <option value="">无</option>
-          ${providerOptions}
-        </select>
-      </div>
-      <div class="form-group">
-        <label for="api_endpoint">自定义API端点（可选）</label>
-        <input type="text" id="api_endpoint" name="api_endpoint" class="form-input" placeholder="https://api.example.com/data" />
-      </div>
-      <div class="form-group">
-        <label for="refresh_interval">刷新间隔（秒，0=不刷新）</label>
-        <input type="number" id="refresh_interval" name="refresh_interval" class="form-input" value="0" />
+        <textarea id="content_template" name="content_template" class="form-textarea" rows="10" placeholder="<div>自定义内容</div>"></textarea>
+        <p class="form-help">支持 HTML + CSS，保存后前台刷新即可显示。可用变量：<code>{{data.title}}</code>、<code>{{data.icon}}</code></p>
       </div>
       <div class="form-actions">
         <button type="submit" class="btn btn-primary">创建</button>
@@ -189,7 +147,6 @@ dashboardAdmin.get("/cards/new", async (c) => {
   return c.html(adminLayout("新建卡片", content, { csrfToken: session.csrfToken }));
 });
 
-// ============ 保存卡片 ============
 dashboardAdmin.post("/cards", async (c) => {
   try {
     const session = getAuthenticatedSession(c);
@@ -199,14 +156,10 @@ dashboardAdmin.post("/cards", async (c) => {
     }
     const title = getBodyText(body, "title").trim();
     const icon = getBodyText(body, "icon").trim() || null;
-    const type = getBodyText(body, "type") || "custom";
     const sizePreset = getBodyText(body, "size_preset") || "small";
     const width = Number.parseInt(getBodyText(body, "width")) || 1;
     const height = Number.parseInt(getBodyText(body, "height")) || 1;
     const contentTemplate = getBodyText(body, "content_template") || "";
-    const apiProviderId = Number.parseInt(getBodyText(body, "api_provider_id")) || null;
-    const apiEndpoint = getBodyText(body, "api_endpoint") || null;
-    const refreshInterval = Number.parseInt(getBodyText(body, "refresh_interval")) || 0;
 
     if (!title) return c.text("标题不能为空", 400);
 
@@ -216,14 +169,12 @@ dashboardAdmin.post("/cards", async (c) => {
       cardKey,
       title,
       icon,
-      type,
+      type: "custom",
       contentTemplate,
       sizePreset,
       width,
       height,
-      apiProviderId,
-      apiEndpoint,
-      refreshInterval,
+      isEnabled: 1,
     });
     return c.redirect("/api/admin/dashboard-admin");
   } catch (error) {
@@ -239,11 +190,6 @@ dashboardAdmin.get("/cards/:id/edit", async (c) => {
   const [card] = await db.select().from(dashboardCards).where(eq(dashboardCards.id, id));
   if (!card) return c.notFound();
 
-  const providers = await db.select().from(apiProviders);
-  const providerOptions = providers.map(p =>
-    `<option value="${p.id}" ${p.id === card.apiProviderId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`
-  ).join('');
-
   const content = `
     <h1>编辑卡片</h1>
     <form method="post" action="/api/admin/dashboard-admin/cards/${id}" class="form">
@@ -258,15 +204,6 @@ dashboardAdmin.get("/cards/:id/edit", async (c) => {
         <input type="text" id="icon" name="icon" class="form-input" value="${escapeAttribute(card.icon || '')}" placeholder="🕐 或 mdi:clock" />
       </div>
       <div class="form-group">
-        <label for="type">卡片类型</label>
-        <select id="type" name="type" class="form-select" disabled>
-          <option value="system" ${card.type === 'system' ? 'selected' : ''}>系统</option>
-          <option value="custom" ${card.type === 'custom' ? 'selected' : ''}>自定义</option>
-        </select>
-        <input type="hidden" name="type" value="${card.type}" />
-        <p class="form-help">系统卡片为内置固定卡片，不可修改类型；自定义卡片可自由编辑内容。</p>
-      </div>
-      <div class="form-group">
         <label for="size_preset">大小预设</label>
         <select id="size_preset" name="size_preset" class="form-select">
           <option value="small" ${card.sizePreset === 'small' ? 'selected' : ''}>小 (1列)</option>
@@ -275,7 +212,7 @@ dashboardAdmin.get("/cards/:id/edit", async (c) => {
           <option value="xlarge" ${card.sizePreset === 'xlarge' ? 'selected' : ''}>超大 (4列)</option>
           <option value="custom" ${card.sizePreset === 'custom' ? 'selected' : ''}>自定义</option>
         </select>
-        <p class="form-help">预设大小对应网格列数（1-4列），选择“自定义”后可手动设置列数和行数。</p>
+        <p class="form-help">预设大小对应网格列数（1-4列），选择"自定义"后可手动设置列数和行数。</p>
       </div>
       <div class="form-group" id="customSizeGroup" style="${card.sizePreset === 'custom' ? 'display:block;' : 'display:none;'}">
         <label>自定义大小</label>
@@ -288,22 +225,7 @@ dashboardAdmin.get("/cards/:id/edit", async (c) => {
       <div class="form-group">
         <label for="content_template">内容模板（HTML代码）</label>
         <textarea id="content_template" name="content_template" class="form-textarea" rows="10">${escapeHtml(card.contentTemplate || '')}</textarea>
-        <p class="form-help">支持 HTML + CSS + 模板变量。可用变量：<code>{{data.title}}</code>、<code>{{data.value}}</code>、<code>{{apiResponse}}</code></p>
-      </div>
-      <div class="form-group">
-        <label for="api_provider_id">关联API提供商</label>
-        <select id="api_provider_id" name="api_provider_id" class="form-select">
-          <option value="">无</option>
-          ${providerOptions}
-        </select>
-      </div>
-      <div class="form-group">
-        <label for="api_endpoint">自定义API端点</label>
-        <input type="text" id="api_endpoint" name="api_endpoint" class="form-input" value="${escapeAttribute(card.apiEndpoint || '')}" placeholder="https://api.example.com/data" />
-      </div>
-      <div class="form-group">
-        <label for="refresh_interval">刷新间隔（秒，0=不刷新）</label>
-        <input type="number" id="refresh_interval" name="refresh_interval" class="form-input" value="${card.refreshInterval}" />
+        <p class="form-help">支持 HTML + CSS，保存后前台刷新即可显示。可用变量：<code>{{data.title}}</code>、<code>{{data.icon}}</code></p>
       </div>
       <div class="form-actions">
         <button type="submit" class="btn btn-primary">更新</button>
@@ -330,20 +252,16 @@ dashboardAdmin.post("/cards/:id", async (c) => {
     }
     const title = getBodyText(body, "title").trim();
     const icon = getBodyText(body, "icon").trim() || null;
-    const type = getBodyText(body, "type") || "custom";
     const sizePreset = getBodyText(body, "size_preset") || "small";
     const width = Number.parseInt(getBodyText(body, "width")) || 1;
     const height = Number.parseInt(getBodyText(body, "height")) || 1;
     const contentTemplate = getBodyText(body, "content_template") || "";
-    const apiProviderId = Number.parseInt(getBodyText(body, "api_provider_id")) || null;
-    const apiEndpoint = getBodyText(body, "api_endpoint") || null;
-    const refreshInterval = Number.parseInt(getBodyText(body, "refresh_interval")) || 0;
 
     if (!title) return c.text("标题不能为空", 400);
 
     const db = getDb(c.env.DB);
     await db.update(dashboardCards)
-      .set({ title, icon, type, contentTemplate, sizePreset, width, height, apiProviderId, apiEndpoint, refreshInterval, updatedAt: new Date().toISOString() })
+      .set({ title, icon, contentTemplate, sizePreset, width, height, updatedAt: new Date().toISOString() })
       .where(eq(dashboardCards.id, id));
     return c.redirect("/api/admin/dashboard-admin");
   } catch (error) {
@@ -351,7 +269,6 @@ dashboardAdmin.post("/cards/:id", async (c) => {
   }
 });
 
-// ============ 删除卡片（仅自定义） ============
 dashboardAdmin.post("/cards/:id/delete", async (c) => {
   try {
     const session = getAuthenticatedSession(c);
@@ -361,10 +278,6 @@ dashboardAdmin.post("/cards/:id/delete", async (c) => {
       return c.text("CSRF 校验失败", 403);
     }
     const db = getDb(c.env.DB);
-    const [card] = await db.select().from(dashboardCards).where(eq(dashboardCards.id, id));
-    if (card.type === 'system') {
-      return c.text("系统卡片不能删除", 400);
-    }
     await db.delete(dashboardCards).where(eq(dashboardCards.id, id));
     return c.redirect("/api/admin/dashboard-admin");
   } catch (error) {
@@ -372,7 +285,7 @@ dashboardAdmin.post("/cards/:id/delete", async (c) => {
   }
 });
 
-// ============ 编辑布局 ============
+// ============ 编辑布局（增加取消按钮） ============
 dashboardAdmin.get("/layout/edit", async (c) => {
   const session = getAuthenticatedSession(c);
   const db = getDb(c.env.DB);
@@ -403,7 +316,7 @@ dashboardAdmin.get("/layout/edit", async (c) => {
 
     <div style="margin-top:1rem; display:flex; gap:0.5rem;">
       <button id="saveLayoutBtn" class="btn btn-primary">保存布局</button>
-      <a href="/api/admin/dashboard-admin" class="btn">返回</a>
+      <a href="/api/admin/dashboard-admin" class="btn">取消</a>
     </div>
 
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridstack@10.3.1/dist/gridstack.min.css" />
@@ -482,7 +395,6 @@ dashboardAdmin.get("/layout/edit", async (c) => {
   return c.html(adminLayout("编辑布局", content, { csrfToken: session.csrfToken }));
 });
 
-// ============ 保存布局 ====== ======
 dashboardAdmin.post("/layout/save", async (c) => {
   try {
     const session = getAuthenticatedSession(c);
@@ -509,183 +421,6 @@ dashboardAdmin.post("/layout/save", async (c) => {
     return c.json({ success: true });
   } catch (error) {
     return c.json({ success: false, error: error.message }, 500);
-  }
-});
-
-// ============ API管理 ============
-dashboardAdmin.get("/providers", async (c) => {
-  const session = getAuthenticatedSession(c);
-  const db = getDb(c.env.DB);
-  const providers = await db.select().from(apiProviders).orderBy(asc(apiProviders.name));
-
-  const rows = providers.map(p => `
-    <tr>
-      <td>${escapeHtml(p.name)}</td>
-      <td>${escapeHtml(p.baseUrl)}</td>
-      <td>${p.authType}</td>
-      <td>${p.apiKey ? '已设置' : '未设置'}</td>
-      <td>
-        <a href="/api/admin/dashboard-admin/providers/${p.id}/edit" class="btn btn-sm">编辑</a>
-        <form method="post" action="/api/admin/dashboard-admin/providers/${p.id}/delete" style="display:inline;">
-          <input type="hidden" name="_csrf" value="${escapeAttribute(session.csrfToken)}" />
-          <button type="submit" class="btn btn-sm btn-danger">删除</button>
-        </form>
-      </td>
-    </tr>
-  `).join('');
-
-  const content = `
-    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem;">
-      <h1 style="margin:0;">API提供商管理</h1>
-      <a href="/api/admin/dashboard-admin/providers/new" class="btn btn-primary">新建提供商</a>
-    </div>
-    <div class="table-card">
-      <table class="data-table">
-        <thead><tr><th>名称</th><th>基础URL</th><th>认证方式</th><th>API Key</th><th>操作</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="5" class="empty-state">暂无提供商</td></tr>'}</tbody>
-      </table>
-    </div>
-  `;
-  return c.html(adminLayout("API管理", content, { csrfToken: session.csrfToken }));
-});
-
-dashboardAdmin.get("/providers/new", async (c) => {
-  const session = getAuthenticatedSession(c);
-  const content = `
-    <h1>新建API提供商</h1>
-    <form method="post" action="/api/admin/dashboard-admin/providers" class="form">
-      <input type="hidden" name="_csrf" value="${escapeAttribute(session.csrfToken)}" />
-      <div class="form-group">
-        <label for="name">名称 *</label>
-        <input type="text" id="name" name="name" class="form-input" required />
-      </div>
-      <div class="form-group">
-        <label for="base_url">基础URL *</label>
-        <input type="text" id="base_url" name="base_url" class="form-input" required placeholder="https://api.example.com/v1" />
-      </div>
-      <div class="form-group">
-        <label for="auth_type">认证方式</label>
-        <select id="auth_type" name="auth_type" class="form-select">
-          <option value="bearer">Bearer Token</option>
-          <option value="api_key">API Key</option>
-          <option value="none">无</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label for="api_key">API Key</label>
-        <input type="text" id="api_key" name="api_key" class="form-input" placeholder="sk-xxx" />
-      </div>
-      <div class="form-group">
-        <label for="header_name">Header名称</label>
-        <input type="text" id="header_name" name="header_name" class="form-input" placeholder="Authorization" value="Authorization" />
-      </div>
-      <div class="form-actions">
-        <button type="submit" class="btn btn-primary">创建</button>
-        <a href="/api/admin/dashboard-admin/providers" class="btn">取消</a>
-      </div>
-    </form>
-  `;
-  return c.html(adminLayout("新建API提供商", content, { csrfToken: session.csrfToken }));
-});
-
-dashboardAdmin.post("/providers", async (c) => {
-  try {
-    const session = getAuthenticatedSession(c);
-    const body = await c.req.parseBody();
-    if (!assertCsrfToken(getBodyText(body, "_csrf"), session)) return c.text("CSRF 校验失败", 403);
-    const name = getBodyText(body, "name").trim();
-    const baseUrl = getBodyText(body, "base_url").trim();
-    const apiKey = getBodyText(body, "api_key").trim() || null;
-    const authType = getBodyText(body, "auth_type") || "bearer";
-    const headerName = getBodyText(body, "header_name") || "Authorization";
-    if (!name || !baseUrl) return c.text("名称和基础URL为必填项", 400);
-    const db = getDb(c.env.DB);
-    await db.insert(apiProviders).values({ name, baseUrl, apiKey, authType, headerName });
-    return c.redirect("/api/admin/dashboard-admin/providers");
-  } catch (error) {
-    return c.text(`错误: ${error.message}`, 500);
-  }
-});
-
-dashboardAdmin.get("/providers/:id/edit", async (c) => {
-  const session = getAuthenticatedSession(c);
-  const id = Number.parseInt(c.req.param("id"));
-  const db = getDb(c.env.DB);
-  const [provider] = await db.select().from(apiProviders).where(eq(apiProviders.id, id));
-  if (!provider) return c.notFound();
-
-  const content = `
-    <h1>编辑API提供商</h1>
-    <form method="post" action="/api/admin/dashboard-admin/providers/${id}" class="form">
-      <input type="hidden" name="_csrf" value="${escapeAttribute(session.csrfToken)}" />
-      <input type="hidden" name="_method" value="put" />
-      <div class="form-group">
-        <label for="name">名称 *</label>
-        <input type="text" id="name" name="name" class="form-input" value="${escapeAttribute(provider.name)}" required />
-      </div>
-      <div class="form-group">
-        <label for="base_url">基础URL *</label>
-        <input type="text" id="base_url" name="base_url" class="form-input" value="${escapeAttribute(provider.baseUrl)}" required />
-      </div>
-      <div class="form-group">
-        <label for="auth_type">认证方式</label>
-        <select id="auth_type" name="auth_type" class="form-select">
-          <option value="bearer" ${provider.authType === 'bearer' ? 'selected' : ''}>Bearer Token</option>
-          <option value="api_key" ${provider.authType === 'api_key' ? 'selected' : ''}>API Key</option>
-          <option value="none" ${provider.authType === 'none' ? 'selected' : ''}>无</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label for="api_key">API Key</label>
-        <input type="text" id="api_key" name="api_key" class="form-input" value="${escapeAttribute(provider.apiKey || '')}" placeholder="留空则不修改" />
-        <p class="form-help">当前${provider.apiKey ? '已设置' : '未设置'}</p>
-      </div>
-      <div class="form-group">
-        <label for="header_name">Header名称</label>
-        <input type="text" id="header_name" name="header_name" class="form-input" value="${escapeAttribute(provider.headerName || 'Authorization')}" />
-      </div>
-      <div class="form-actions">
-        <button type="submit" class="btn btn-primary">更新</button>
-        <a href="/api/admin/dashboard-admin/providers" class="btn">取消</a>
-      </div>
-    </form>
-  `;
-  return c.html(adminLayout("编辑API提供商", content, { csrfToken: session.csrfToken }));
-});
-
-dashboardAdmin.post("/providers/:id", async (c) => {
-  try {
-    const session = getAuthenticatedSession(c);
-    const id = Number.parseInt(c.req.param("id"));
-    const body = await c.req.parseBody();
-    if (!assertCsrfToken(getBodyText(body, "_csrf"), session)) return c.text("CSRF 校验失败", 403);
-    const name = getBodyText(body, "name").trim();
-    const baseUrl = getBodyText(body, "base_url").trim();
-    const apiKey = getBodyText(body, "api_key").trim() || null;
-    const authType = getBodyText(body, "auth_type") || "bearer";
-    const headerName = getBodyText(body, "header_name") || "Authorization";
-    if (!name || !baseUrl) return c.text("名称和基础URL为必填项", 400);
-    const db = getDb(c.env.DB);
-    await db.update(apiProviders)
-      .set({ name, baseUrl, apiKey, authType, headerName, updatedAt: new Date().toISOString() })
-      .where(eq(apiProviders.id, id));
-    return c.redirect("/api/admin/dashboard-admin/providers");
-  } catch (error) {
-    return c.text(`错误: ${error.message}`, 500);
-  }
-});
-
-dashboardAdmin.post("/providers/:id/delete", async (c) => {
-  try {
-    const session = getAuthenticatedSession(c);
-    const id = Number.parseInt(c.req.param("id"));
-    const body = await c.req.parseBody();
-    if (!assertCsrfToken(getBodyText(body, "_csrf"), session)) return c.text("CSRF 校验失败", 403);
-    const db = getDb(c.env.DB);
-    await db.delete(apiProviders).where(eq(apiProviders.id, id));
-    return c.redirect("/api/admin/dashboard-admin/providers");
-  } catch (error) {
-    return c.text(`错误: ${error.message}`, 500);
   }
 });
 

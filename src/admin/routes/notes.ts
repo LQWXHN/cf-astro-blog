@@ -28,7 +28,6 @@ notesRoutes.get("/", async (c) => {
     }
     const allNotes = await query.orderBy(desc(notes.createdAt));
 
-    // 统计
     const stats = await db
       .select({
         total: sql<number>`count(*)`.as("total"),
@@ -100,20 +99,10 @@ notesRoutes.get("/", async (c) => {
             `<a href="/api/admin/notes?status=${opt.value}" class="btn btn-sm ${statusFilter === opt.value ? "btn-primary" : ""}">${opt.label}</a>`
           ).join("")}
         </div>
-        <div style="display: flex; gap: 0.5rem;">
-          <form method="post" action="/api/admin/notes/batch-approve" style="display: inline-flex; gap: 0.3rem; align-items: center;">
-            <input type="hidden" name="_csrf" value="${escapeAttribute(session.csrfToken)}" />
-            <button type="submit" class="btn btn-sm btn-primary" onclick="return confirm('确认批量通过选中的便签吗？')">批量通过</button>
-          </form>
-          <form method="post" action="/api/admin/notes/batch-reject" style="display: inline-flex; gap: 0.3rem; align-items: center;">
-            <input type="hidden" name="_csrf" value="${escapeAttribute(session.csrfToken)}" />
-            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确认批量拒绝选中的便签吗？')">批量拒绝</button>
-          </form>
-          <form method="post" action="/api/admin/notes/batch-delete" style="display: inline-flex; gap: 0.3rem; align-items: center;">
-            <input type="hidden" name="_csrf" value="${escapeAttribute(session.csrfToken)}" />
-            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确认删除选中的便签吗？')">批量删除</button>
-          </form>
-        </div>
+        <form method="post" action="/api/admin/notes/batch-delete" style="display: inline-flex; gap: 0.3rem; align-items: center;">
+          <input type="hidden" name="_csrf" value="${escapeAttribute(session.csrfToken)}" />
+          <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确认删除选中的便签吗？')">批量删除</button>
+        </form>
       </div>
 
       <div class="table-card">
@@ -192,45 +181,7 @@ notesRoutes.post("/:id/delete", async (c) => {
   }
 });
 
-// ===== 批量通过 =====
-notesRoutes.post("/batch-approve", async (c) => {
-  try {
-    const session = getAuthenticatedSession(c);
-    const body = await c.req.parseBody();
-    if (!assertCsrfToken(getBodyText(body, "_csrf"), session)) return c.text("CSRF 校验失败", 403);
-    const ids = body["ids"] || [];
-    const idList = Array.isArray(ids) ? ids.map(Number).filter(n => !isNaN(n)) : [];
-    if (idList.length === 0) return c.text("请选择要操作的便签", 400);
-    const db = getDb(c.env.DB);
-    await db.update(notes)
-      .set({ status: "approved", updatedAt: new Date().toISOString() })
-      .where(sql`id IN (${idList.join(",")})`);
-    return c.redirect("/api/admin/notes");
-  } catch (error: any) {
-    return c.text(`错误: ${error.message}`, 500);
-  }
-});
-
-// ===== 批量拒绝 =====
-notesRoutes.post("/batch-reject", async (c) => {
-  try {
-    const session = getAuthenticatedSession(c);
-    const body = await c.req.parseBody();
-    if (!assertCsrfToken(getBodyText(body, "_csrf"), session)) return c.text("CSRF 校验失败", 403);
-    const ids = body["ids"] || [];
-    const idList = Array.isArray(ids) ? ids.map(Number).filter(n => !isNaN(n)) : [];
-    if (idList.length === 0) return c.text("请选择要操作的便签", 400);
-    const db = getDb(c.env.DB);
-    await db.update(notes)
-      .set({ status: "rejected", updatedAt: new Date().toISOString() })
-      .where(sql`id IN (${idList.join(",")})`);
-    return c.redirect("/api/admin/notes");
-  } catch (error: any) {
-    return c.text(`错误: ${error.message}`, 500);
-  }
-});
-
-// ===== 批量删除 =====
+// ===== 批量删除（仅保留） =====
 notesRoutes.post("/batch-delete", async (c) => {
   try {
     const session = getAuthenticatedSession(c);

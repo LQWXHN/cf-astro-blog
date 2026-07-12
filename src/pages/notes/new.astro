@@ -8,13 +8,11 @@ import { getDb } from "@/lib/db";
 const colorThemes = ["yellow", "blue", "green", "pink", "purple", "orange"];
 
 // ===== 限流配置 =====
-const RATE_LIMIT = 1; // 1次
-const RATE_LIMIT_WINDOW = 60; // 60秒
+const RATE_LIMIT = 1;
+const RATE_LIMIT_WINDOW = 60;
 
-// ===== 获取用户标识 =====
 const userKey = Astro.clientAddress || "anonymous";
 
-// ===== 处理 POST 提交 =====
 if (Astro.request.method === "POST") {
   const formData = await Astro.request.formData();
   const content = formData.get("content")?.toString().trim();
@@ -22,34 +20,33 @@ if (Astro.request.method === "POST") {
 
   if (content && content.length <= 500) {
     const db = getDb(env.DB);
-    
-    // ===== 限流检查 =====
+
     const lastPost = await db
       .select({ createdAt: notes.createdAt })
       .from(notes)
       .where(eq(notes.visitorIp, userKey))
       .orderBy(desc(notes.createdAt))
       .limit(1);
-      
+
     if (lastPost.length > 0) {
       const lastTime = new Date(lastPost[0].createdAt).getTime();
       const now = Date.now();
       const diffSeconds = (now - lastTime) / 1000;
-      
+
       if (diffSeconds < RATE_LIMIT_WINDOW) {
         const remaining = Math.ceil(RATE_LIMIT_WINDOW - diffSeconds);
         return Astro.redirect(`/notes?error=rate_limit&remaining=${remaining}`);
       }
     }
-    
-    // ===== 插入便签（默认通过 approved） =====
+
+    // ✅ 默认通过 approved
     await db.insert(notes).values({
       content,
       colorTheme,
       positionLeft: Math.floor(Math.random() * 70) + 5,
       positionTop: Math.floor(Math.random() * 70) + 5,
       rotation: Math.floor(Math.random() * 30) - 15,
-      status: "approved", // ✅ 默认通过，无需审核
+      status: "approved",
       visitorIp: userKey,
     });
     return Astro.redirect("/notes?success=1");

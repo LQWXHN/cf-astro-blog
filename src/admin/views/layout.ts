@@ -1539,6 +1539,9 @@ export const adminSharedStyles = `
 		}
 `;
 
+// ============================================================
+// 🔧 修复便签墙高亮：添加对 "便签" 的判断
+// ============================================================
 function resolveActiveNav(title: string): AdminNavKey {
 	if (title.includes("外观")) return "appearance";
 	if (title.includes("友链")) return "friends";
@@ -1547,13 +1550,13 @@ function resolveActiveNav(title: string): AdminNavKey {
 	if (title.includes("媒体")) return "media";
 	if (title.includes("统计")) return "analytics";
 	if (title.includes("工具箱")) return "tools";
+	if (title.includes("便签")) return "notes";          // 🆕 新增
 	if (title.includes("仪表盘管理") || (title.includes("仪表盘") && !title.includes("链接"))) return "dashboard-admin";
 	return "dashboard";
 }
 
 function renderNav(title: string): string {
 	const activeNav = resolveActiveNav(title);
-
 	return navItems
 		.map(
 			(item) => `<a href="${item.href}"${item.key === activeNav ? ' class="active"' : ""}>
