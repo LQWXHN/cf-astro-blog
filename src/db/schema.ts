@@ -424,3 +424,26 @@ export type McpAuditLog = typeof mcpAuditLogs.$inferSelect;
 export type NewMcpAuditLog = typeof mcpAuditLogs.$inferInsert;
 
 export type LoginAttempt = typeof loginAttempts.$inferSelect;
+
+// ===== 追加在文件末尾，原有内容不变 =====
+
+// ─── 仪表盘链接表 ─────────────────────────────────────────────────────────────
+
+export const dashboardLinks = sqliteTable(
+  "dashboard_links",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    title: text("title").notNull(),
+    icon: text("icon"), // 图标 URL 或 Iconify 图标名（如 "mdi:home"）
+    url: text("url").notNull(),
+    sortOrder: integer("sort_order").default(0),
+    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    index("dashboard_links_sort_idx").on(table.sortOrder),
+  ],
+);
+
+export type DashboardLink = typeof dashboardLinks.$inferSelect;
+export type NewDashboardLink = typeof dashboardLinks.$inferInsert;
