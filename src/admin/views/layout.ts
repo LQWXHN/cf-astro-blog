@@ -13,7 +13,7 @@ type AdminNavKey =
 	| "media"
 	| "analytics"
 	| "tools"
-	| "dashboard-links"
+	| "notes"
 	| "dashboard-admin";
 
 const navItems: Array<{ key: AdminNavKey; label: string; href: string }> = [
@@ -21,10 +21,9 @@ const navItems: Array<{ key: AdminNavKey; label: string; href: string }> = [
 	{ key: "appearance", label: "外观", href: "/api/admin/appearance" },
 	{ key: "posts", label: "文章", href: "/api/admin/posts" },
 	{ key: "media", label: "媒体", href: "/api/admin/media" },
-	{ key: "tools", label: "工具箱", href: "/api/admin/tools" }, 
+	{ key: "tools", label: "工具箱", href: "/api/admin/tools" },
 	{ key: "notes", label: "便签墙", href: "/api/admin/notes" },
 	{ key: "dashboard-admin", label: "仪表盘", href: "/api/admin/dashboard-admin" },
-	{ key: "dashboard-links", label: "仪表盘链接", href: "/api/admin/dashboard-links" },
 	{ key: "friends", label: "友链", href: "/api/admin/friends" },
 	{ key: "mentions", label: "提及", href: "/api/admin/mentions" },
 	{ key: "analytics", label: "统计", href: "/api/admin/analytics" },
@@ -1544,19 +1543,12 @@ function resolveActiveNav(title: string): AdminNavKey {
 	if (title.includes("外观")) return "appearance";
 	if (title.includes("友链")) return "friends";
 	if (title.includes("提及")) return "mentions";
-	if (
-		title.includes("文章") ||
-		title.includes("编辑") ||
-		title.includes("新建")
-	) {
-		return "posts";
-	}
+	if (title.includes("文章") || title.includes("编辑") || title.includes("新建")) return "posts";
 	if (title.includes("媒体")) return "media";
 	if (title.includes("统计")) return "analytics";
-	if (title.includes("工具箱")) return "tools"; // 🆕 匹配工具箱
-	if (title.includes("仪表盘链接") || title.includes("链接管理")) return "dashboard-links";
-	if (title.includes("仪表盘管理") || (title.includes("仪表盘") && !title.includes("链接")));
-	return "dashboard-admin";
+	if (title.includes("工具箱")) return "tools";
+	if (title.includes("仪表盘管理") || (title.includes("仪表盘") && !title.includes("链接"))) return "dashboard-admin";
+	return "dashboard";
 }
 
 function renderNav(title: string): string {
@@ -1564,9 +1556,7 @@ function renderNav(title: string): string {
 
 	return navItems
 		.map(
-			(
-				item,
-			) => `<a href="${item.href}"${item.key === activeNav ? ' class="active"' : ""}>
+			(item) => `<a href="${item.href}"${item.key === activeNav ? ' class="active"' : ""}>
 				<span>${item.label}</span>
 			</a>`,
 		)

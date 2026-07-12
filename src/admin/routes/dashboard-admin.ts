@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { asc, desc, eq } from "drizzle-orm";
-import { dashboardCards, dashboardLayouts, apiProviders } from "@/db/schema";
+import { dashboardCards, dashboardLayouts, apiProviders, dashboardLinks } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { escapeAttribute, escapeHtml } from "@/lib/security";
 import {
@@ -15,14 +15,54 @@ import { adminLayout } from "../views/layout";
 const dashboardAdmin = new Hono<AdminAppEnv>();
 dashboardAdmin.use("*", requireAuth);
 
-// ============ 仪表盘管理首页 ============
+// ============ 仪表盘管理首页（整合卡片 + 链接） ============
 dashboardAdmin.get("/", async (c) => {
   const session = getAuthenticatedSession(c);
   const db = getDb(c.env.DB);
 
+  // 获取卡片列表
   const cards = await db.select().from(dashboardCards).orderBy(asc(dashboardCards.sortOrder));
+  // 获取链接列表
+  const links = await db.select().from(dashboardLinks).orderBy(asc(dashboardLinks.sortOrder));
   const layouts = await db.select().from(dashboardLayouts).orderBy(asc(dashboardLayouts.name));
   const providers = await db.select().from(apiProviders);
+
+  // 卡片表格
+  const cardsRows = cards.map(card => `
+    <tr>
+      <td>${card.icon || '—'}</td>
+      <td>${escapeHtml(card.title)}</td>
+      <td><span class="badge ${card.type === 'system' ? 'badge-published' : 'badge-draft'}">${card.type === 'system' ? '系统' : '自定义'}</span></td>
+      <td>${card.sizePreset}</td>
+      <td>${card.isEnabled ? '✅' : '❌'}</td>
+      <td>
+        <a href="/api/admin/dashboard-admin/cards/${card.id}/edit" class="btn btn-sm">编辑</a>
+        ${card.type !== 'system' ? `
+          <form method="post" action="/api/admin/dashboard-admin/cards/${card.id}/delete" style="display:inline;">
+            <input type="hidden" name="_csrf" value="${escapeAttribute(session.csrfToken)}" />
+            <button type="submit" class="btn btn-sm btn-danger">删除</button>
+          </form>
+        ` : '<span style="color:var(--text-muted);font-size:0.7rem;">系统不可删</span>'}
+      </td>
+    </tr>
+  `).join('');
+
+  // 链接表格
+  const linksRows = links.length > 0 ? links.map(link => `
+    <tr>
+      <td>${link.icon ? (link.icon.startsWith('http') ? `<img src="${escapeAttribute(link.icon)}" style="width:24px;height:24px;object-fit:contain;border-radius:4px;" />` : `<span style="font-size:1.2rem;">${escapeHtml(link.icon)}</span>`) : '—'}</td>
+      <td><strong>${escapeHtml(link.title)}</strong></td>
+      <td><a href="${escapeAttribute(link.url)}" target="_blank" style="color:var(--color-accent);">${escapeHtml(link.url)}</a></td>
+      <td>${link.sortOrder}</td>
+      <td>
+        <a href="/api/admin/dashboard-links/${link.id}/edit" class="btn btn-sm">编辑</a>
+        <form method="post" action="/api/admin/dashboard-links/${link.id}/delete" style="display:inline;">
+          <input type="hidden" name="_csrf" value="${escapeAttribute(session.csrfToken)}" />
+          <button type="submit" class="btn btn-sm btn-danger">删除</button>
+        </form>
+      </td>
+    </tr>
+  `).join('') : `<tr><td colspan="5" class="empty-state">暂无链接</td></tr>`;
 
   const content = `
     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem;">
@@ -31,9 +71,11 @@ dashboardAdmin.get("/", async (c) => {
         <a href="/api/admin/dashboard-admin/cards/new" class="btn btn-primary">新建卡片</a>
         <a href="/api/admin/dashboard-admin/layout/edit" class="btn">编辑布局</a>
         <a href="/api/admin/dashboard-admin/providers" class="btn">API管理</a>
+        <a href="/api/admin/dashboard-links/new" class="btn">新建链接</a>
       </div>
     </div>
 
+    <!-- 卡片管理 -->
     <h2>卡片管理</h2>
     <div class="table-card">
       <table class="data-table">
@@ -41,25 +83,20 @@ dashboardAdmin.get("/", async (c) => {
           <th>图标</th><th>标题</th><th>类型</th><th>大小</th><th>状态</th><th>操作</th>
         </tr></thead>
         <tbody>
-          ${cards.map(card => `
-            <tr>
-              <td>${card.icon || '—'}</td>
-              <td>${escapeHtml(card.title)}</td>
-              <td><span class="badge ${card.type === 'system' ? 'badge-published' : 'badge-draft'}">${card.type === 'system' ? '系统' : '自定义'}</span></td>
-              <td>${card.sizePreset}</td>
-              <td>${card.isEnabled ? '✅' : '❌'}</td>
-              <td>
-                <a href="/api/admin/dashboard-admin/cards/${card.id}/edit" class="btn btn-sm">编辑</a>
-                ${card.type !== 'system' ? `
-                  <form method="post" action="/api/admin/dashboard-admin/cards/${card.id}/delete" style="display:inline;">
-                    <input type="hidden" name="_csrf" value="${escapeAttribute(session.csrfToken)}" />
-                    <button type="submit" class="btn btn-sm btn-danger">删除</button>
-                  </form>
-                ` : '<span style="color:var(--text-muted);font-size:0.7rem;">系统不可删</span>'}
-              </td>
-            </tr>
-          `).join('')}
-          ${cards.length === 0 ? `<tr><td colspan="6" class="empty-state">暂无卡片</td></tr>` : ''}
+          ${cardsRows || `<tr><td colspan="6" class="empty-state">暂无卡片</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 链接管理 -->
+    <h2 style="margin-top:2rem;">链接管理</h2>
+    <div class="table-card">
+      <table class="data-table">
+        <thead><tr>
+          <th>图标</th><th>名称</th><th>地址</th><th>排序</th><th>操作</th>
+        </tr></thead>
+        <tbody>
+          ${linksRows}
         </tbody>
       </table>
     </div>
