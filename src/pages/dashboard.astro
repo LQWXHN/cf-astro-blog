@@ -524,7 +524,7 @@ function renderCard(card: any): string {
 
 <Base title="仪表盘" description="信息聚合中心">
   <div class="dashboard-grid">
-    ${cards.length > 0 ? cards.map(card => renderCard(card)).join('') : '<p class="empty-state" style="grid-column: 1 / -1; text-align:center; padding:2rem;">暂无卡片，请后台添加</p>'}
+  {@html cards.length > 0 ? cards.map(card => renderCard(card)).join('') : '<p class="empty-state">暂无卡片</p>'}
   </div>
 </Base>
 
