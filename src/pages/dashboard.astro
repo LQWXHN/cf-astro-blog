@@ -179,7 +179,6 @@ function getDateProgress() {
     yearRemain: daysInYear - daysPassed,
     monthRemain: daysInMonth - now.getDate(),
     weekRemain: 7 - dayOfWeek,
-    // 起始和结束时间戳（用于客户端计算）
     yearStart: yearStart.getTime(),
     yearEnd: yearEnd.getTime(),
     monthStart: monthStart.getTime(),
@@ -203,6 +202,17 @@ const [weather, weatherHistory, hotboard, holiday, saying, bing] = await Promise
 const progress = getDateProgress();
 const nextHoliday = holiday?.nearby?.[0];
 const holidayTarget = nextHoliday ? new Date(nextHoliday.date).getTime() : null;
+
+// ===== 准备传递给客户端的数据 =====
+const scriptData = {
+  yearStart: progress.yearStart,
+  yearEnd: progress.yearEnd,
+  monthStart: progress.monthStart,
+  monthEnd: progress.monthEnd,
+  weekStart: progress.weekStart,
+  weekEnd: progress.weekEnd,
+  holidayTarget: holidayTarget,
+};
 ---
 
 <Base title="仪表盘" description="信息聚合中心">
@@ -302,33 +312,33 @@ const holidayTarget = nextHoliday ? new Date(nextHoliday.date).getTime() : null;
       <div class="calendar-content">
         <!-- 本年剩余 -->
         <div class="progress-item">
-          <span id="yearLabel">本年剩余 <strong id="yearRemain">${progress.yearRemain}</strong> 天</span>
+          <span id="yearLabel">本年剩余 <strong id="yearRemain">{progress.yearRemain}</strong> 天</span>
           <div class="progress-bar">
-            <div class="progress-fill" id="yearProgressFill" style="width: ${progress.yearProgress}%;"></div>
+            <div class="progress-fill" id="yearProgressFill" style="width: {progress.yearProgress}%;"></div>
           </div>
-          <span class="progress-label" id="yearPercent">${progress.yearProgress}%</span>
+          <span class="progress-label" id="yearPercent">{progress.yearProgress}%</span>
         </div>
         <!-- 本月剩余 -->
         <div class="progress-item">
-          <span id="monthLabel">本月剩余 <strong id="monthRemain">${progress.monthRemain}</strong> 天</span>
+          <span id="monthLabel">本月剩余 <strong id="monthRemain">{progress.monthRemain}</strong> 天</span>
           <div class="progress-bar">
-            <div class="progress-fill" id="monthProgressFill" style="width: ${progress.monthProgress}%;"></div>
+            <div class="progress-fill" id="monthProgressFill" style="width: {progress.monthProgress}%;"></div>
           </div>
-          <span class="progress-label" id="monthPercent">${progress.monthProgress}%</span>
+          <span class="progress-label" id="monthPercent">{progress.monthProgress}%</span>
         </div>
         <!-- 本周剩余 -->
         <div class="progress-item">
-          <span id="weekLabel">本周剩余 <strong id="weekRemain">${progress.weekRemain}</strong> 天</span>
+          <span id="weekLabel">本周剩余 <strong id="weekRemain">{progress.weekRemain}</strong> 天</span>
           <div class="progress-bar">
-            <div class="progress-fill" id="weekProgressFill" style="width: ${progress.weekProgress}%;"></div>
+            <div class="progress-fill" id="weekProgressFill" style="width: {progress.weekProgress}%;"></div>
           </div>
-          <span class="progress-label" id="weekPercent">${progress.weekProgress}%</span>
+          <span class="progress-label" id="weekPercent">{progress.weekProgress}%</span>
         </div>
         <!-- 距离下一个节日 -->
         {nextHoliday && (
           <div class="next-holiday" id="holidayInfo">
-            🎉 距离 <strong>${nextHoliday.name}</strong> 还有{' '}
-            <strong id="holidayRemain">${nextHoliday.days_until}</strong> 天
+            🎉 距离 <strong>{nextHoliday.name}</strong> 还有{' '}
+            <strong id="holidayRemain">{nextHoliday.days_until}</strong> 天
           </div>
         )}
       </div>
@@ -362,7 +372,7 @@ const holidayTarget = nextHoliday ? new Date(nextHoliday.date).getTime() : null;
 </Base>
 
 <style>
-  /* 样式与之前相同，保持不变 */
+  /* 样式保持不变 */
   .dashboard-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -442,7 +452,14 @@ const holidayTarget = nextHoliday ? new Date(nextHoliday.date).getTime() : null;
   }
 </style>
 
-<script>
+<script define:vars={{ scriptData }}>
+  const {
+    yearStart, yearEnd,
+    monthStart, monthEnd,
+    weekStart, weekEnd,
+    holidayTarget,
+  } = scriptData;
+
   // 实时时钟（每秒）
   function updateClock() {
     const now = new Date();
@@ -460,42 +477,10 @@ const holidayTarget = nextHoliday ? new Date(nextHoliday.date).getTime() : null;
     });
   }
 
-  // 倒计时更新（每秒更新剩余时间，进度条每小时更新）
-  function updateCountdown() {
-    const now = Date.now();
-
-    // 年
-    const yearStart = ${progress.yearStart};
-    const yearEnd = ${progress.yearEnd};
-    updateItem('yearRemain', 'yearProgressFill', 'yearPercent', yearStart, yearEnd, now, true);
-
-    // 月
-    const monthStart = ${progress.monthStart};
-    const monthEnd = ${progress.monthEnd};
-    updateItem('monthRemain', 'monthProgressFill', 'monthPercent', monthStart, monthEnd, now, true);
-
-    // 周
-    const weekStart = ${progress.weekStart};
-    const weekEnd = ${progress.weekEnd};
-    updateItem('weekRemain', 'weekProgressFill', 'weekPercent', weekStart, weekEnd, now, true);
-
-    // 节日（只有天，不需要进度条）
-    const holidayTarget = ${holidayTarget !== null ? holidayTarget : 'null'};
-    if (holidayTarget !== null) {
-      const diff = holidayTarget - now;
-      if (diff > 0) {
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        document.getElementById('holidayRemain').textContent = days;
-      } else {
-        document.getElementById('holidayRemain').textContent = '0';
-      }
-    }
-  }
-
-  // 更新单个进度项，including 剩余时间、进度条、百分比
-  function updateItem(remainId, progressId, percentId, startTime, endTime, now, updateProgress) {
-    const total = endTime - startTime;
-    const elapsed = now - startTime;
+  // 更新单个进度项
+  function updateItem(remainId, progressId, percentId, start, end, now, updateProgress) {
+    const total = end - start;
+    const elapsed = now - start;
     let progressPercent = 0;
     let remainText = '';
 
@@ -507,7 +492,7 @@ const holidayTarget = nextHoliday ? new Date(nextHoliday.date).getTime() : null;
       remainText = '已结束';
     } else {
       progressPercent = (elapsed / total) * 100;
-      const diff = endTime - now;
+      const diff = end - now;
       const days = Math.floor(diff / (1000 * 60 * 60 * 24));
       const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
@@ -515,10 +500,8 @@ const holidayTarget = nextHoliday ? new Date(nextHoliday.date).getTime() : null;
       remainText = `${days}天${hours}时${minutes}分${seconds}秒`;
     }
 
-    // 更新剩余时间文本
     document.getElementById(remainId).textContent = remainText;
 
-    // 更新进度条和百分比（只在需要时更新，如每小时）
     if (updateProgress) {
       const progressRounded = Math.round(progressPercent * 10) / 10;
       document.getElementById(progressId).style.width = progressPercent + '%';
@@ -526,46 +509,47 @@ const holidayTarget = nextHoliday ? new Date(nextHoliday.date).getTime() : null;
     }
   }
 
-  // 初始化时钟和倒计时
+  // 更新剩余时间（每秒，不更新进度条）
+  function updateCountdown() {
+    const now = Date.now();
+    updateItem('yearRemain', 'yearProgressFill', 'yearPercent', yearStart, yearEnd, now, false);
+    updateItem('monthRemain', 'monthProgressFill', 'monthPercent', monthStart, monthEnd, now, false);
+    updateItem('weekRemain', 'weekProgressFill', 'weekPercent', weekStart, weekEnd, now, false);
+
+    if (holidayTarget !== null) {
+      const diff = holidayTarget - now;
+      if (diff > 0) {
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        document.getElementById('holidayRemain').textContent = days;
+      } else {
+        document.getElementById('holidayRemain').textContent = '0';
+      }
+    }
+  }
+
+  // 更新进度条（每小时调用，更新宽度和百分比）
+  function updateProgressBars() {
+    const now = Date.now();
+    updateItem('yearRemain', 'yearProgressFill', 'yearPercent', yearStart, yearEnd, now, true);
+    updateItem('monthRemain', 'monthProgressFill', 'monthPercent', monthStart, monthEnd, now, true);
+    updateItem('weekRemain', 'weekProgressFill', 'weekPercent', weekStart, weekEnd, now, true);
+  }
+
+  // 初始化
   updateClock();
   setInterval(updateClock, 1000);
 
-  // 首次更新倒计时（包括进度）
   updateCountdown();
+  setInterval(updateCountdown, 1000);
 
-  // 倒计时：每秒更新剩余时间文本，但进度条和百分比仅每小时更新一次
-  // 使用一个变量记录上一次更新进度条的小时数
-  let lastProgressHour = new Date().getHours();
-
+  // 进度条每小时更新一次
+  let lastHour = new Date().getHours();
   setInterval(() => {
     const now = new Date();
     const currentHour = now.getHours();
-    // 如果小时发生变化，更新进度条
-    if (currentHour !== lastProgressHour) {
-      lastProgressHour = currentHour;
-      // 重新计算进度条（传入 updateProgress = true）
-      const nowMs = Date.now();
-      const yearStart = ${progress.yearStart};
-      const yearEnd = ${progress.yearEnd};
-      updateItem('yearRemain', 'yearProgressFill', 'yearPercent', yearStart, yearEnd, nowMs, true);
-      const monthStart = ${progress.monthStart};
-      const monthEnd = ${progress.monthEnd};
-      updateItem('monthRemain', 'monthProgressFill', 'monthPercent', monthStart, monthEnd, nowMs, true);
-      const weekStart = ${progress.weekStart};
-      const weekEnd = ${progress.weekEnd};
-      updateItem('weekRemain', 'weekProgressFill', 'weekPercent', weekStart, weekEnd, nowMs, true);
-    } else {
-      // 小时未变，只更新剩余时间文本（不更新进度条）
-      const nowMs = Date.now();
-      const yearStart = ${progress.yearStart};
-      const yearEnd = ${progress.yearEnd};
-      updateItem('yearRemain', 'yearProgressFill', 'yearPercent', yearStart, yearEnd, nowMs, false);
-      const monthStart = ${progress.monthStart};
-      const monthEnd = ${progress.monthEnd};
-      updateItem('monthRemain', 'monthProgressFill', 'monthPercent', monthStart, monthEnd, nowMs, false);
-      const weekStart = ${progress.weekStart};
-      const weekEnd = ${progress.weekEnd};
-      updateItem('weekRemain', 'weekProgressFill', 'weekPercent', weekStart, weekEnd, nowMs, false);
+    if (currentHour !== lastHour) {
+      lastHour = currentHour;
+      updateProgressBars();
     }
   }, 1000);
 </script>
