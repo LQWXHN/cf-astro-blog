@@ -48,7 +48,7 @@ async function fetchWeather(location: string) {
   }
 }
 
-// ===== 获取历史天气 =====
+// ===== 获取历史天气（兼容多种返回结构） =====
 async function fetchWeatherHistory(location: string) {
   try {
     const controller = new AbortController();
@@ -62,7 +62,12 @@ async function fetchWeatherHistory(location: string) {
     );
     clearTimeout(timeoutId);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+    const data = await res.json();
+    // 兼容多种返回格式：data.days 或 data.list
+    if (data && !data.days && data.list) {
+      data.days = data.list;
+    }
+    return data;
   } catch {
     return null;
   }
@@ -213,6 +218,9 @@ const scriptData = {
   weekEnd: progress.weekEnd,
   holidayTarget: holidayTarget,
 };
+
+// 判断历史天气是否有数据
+const hasWeatherHistory = weatherHistory?.days && weatherHistory.days.length > 0;
 ---
 
 <Base title="仪表盘" description="信息聚合中心">
@@ -250,7 +258,7 @@ const scriptData = {
           </div>
         </div>
       ) : (
-        <p class="empty-state">加载中...</p>
+        <p class="empty-state">暂无天气数据</p>
       )}
     </div>
 
@@ -260,7 +268,7 @@ const scriptData = {
         <span class="card-icon">📊</span>
         <span class="card-title">近7天天气 · {location}</span>
       </div>
-      {weatherHistory?.days && weatherHistory.days.length > 0 ? (
+      {hasWeatherHistory ? (
         <div class="history-chart">
           {weatherHistory.days.map((d: any) => (
             <div
@@ -276,7 +284,7 @@ const scriptData = {
           ))}
         </div>
       ) : (
-        <p class="empty-state">加载中...</p>
+        <p class="empty-state">暂无历史天气数据</p>
       )}
     </div>
 
@@ -299,7 +307,7 @@ const scriptData = {
           ))}
         </ol>
       ) : (
-        <p class="empty-state">加载中...</p>
+        <p class="empty-state">暂无热榜数据</p>
       )}
     </div>
 
@@ -361,7 +369,7 @@ const scriptData = {
           <div class="bing-caption">{bing.title} · {bing.copyright}</div>
         </div>
       ) : (
-        <p class="empty-state">加载中...</p>
+        <p class="empty-state">暂无壁纸</p>
       )}
     </div>
   </div>
