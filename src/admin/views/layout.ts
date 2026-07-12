@@ -1554,8 +1554,8 @@ function resolveActiveNav(title: string): AdminNavKey {
 	if (title.includes("媒体")) return "media";
 	if (title.includes("统计")) return "analytics";
 	if (title.includes("工具箱")) return "tools"; // 🆕 匹配工具箱
-	if (title.includes("仪表盘链接") || title.includes("链接管理")) return "dashboard-links"
-	if (title.includes("仪表盘管理") || (title.includes("仪表盘") && !title.includes("链接")))
+	if (title.includes("仪表盘链接") || title.includes("链接管理")) return "dashboard-links";
+	if (title.includes("仪表盘管理") || (title.includes("仪表盘") && !title.includes("链接")));
 	return "dashboard-admin";
 }
 
