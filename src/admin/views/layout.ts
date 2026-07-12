@@ -14,7 +14,7 @@ type AdminNavKey =
 	| "analytics"
 	| "tools"
 	| "notes"
-	| "dashboard-admin";
+	| "dashboard-links";
 
 const navItems: Array<{ key: AdminNavKey; label: string; href: string }> = [
 	{ key: "dashboard", label: "控制台", href: "/api/admin" },
@@ -23,7 +23,7 @@ const navItems: Array<{ key: AdminNavKey; label: string; href: string }> = [
 	{ key: "media", label: "媒体", href: "/api/admin/media" },
 	{ key: "tools", label: "工具箱", href: "/api/admin/tools" },
 	{ key: "notes", label: "便签墙", href: "/api/admin/notes" },
-	{ key: "dashboard-admin", label: "仪表盘", href: "/api/admin/dashboard-admin" },
+	{ key: "dashboard-admin", label: "仪表盘links", href: "/api/admin/dashboard-links" },
 	{ key: "friends", label: "友链", href: "/api/admin/friends" },
 	{ key: "mentions", label: "提及", href: "/api/admin/mentions" },
 	{ key: "analytics", label: "统计", href: "/api/admin/analytics" },
@@ -1551,7 +1551,7 @@ function resolveActiveNav(title: string): AdminNavKey {
 	if (title.includes("统计")) return "analytics";
 	if (title.includes("工具箱")) return "tools";
 	if (title.includes("便签")) return "notes";          // 🆕 新增
-	if (title.includes("仪表盘管理") || (title.includes("仪表盘") && !title.includes("链接"))) return "dashboard-admin";
+	if (title.includes("链接")) return "dashboard-links";
 	return "dashboard";
 }
 

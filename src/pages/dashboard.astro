@@ -1,9 +1,8 @@
 ---
 import { env } from "cloudflare:workers";
 import Base from "@/layouts/Base.astro";
-import { dashboardCards, dashboardLinks } from "@/db/schema";
+import { dashboardLinks } from "@/db/schema";
 import { getDb } from "@/lib/db";
-import { asc, eq } from "drizzle-orm";
 
 // ===== 配置区 =====
 const UAPI_KEY = "uapi-nwvozms5PJdxLNRw3TJUSQ4nmP_54yHVi9XzIrXX";
@@ -191,20 +190,9 @@ function getWeatherEmoji(code: string): string {
 // ===== 获取数据 =====
 const location = fetchLocationByIP();
 const db = getDb(env.DB);
-let cards: any[] = [];
+
+// 获取 Links 数据（保留链接管理功能）
 let links: any[] = [];
-
-try {
-  cards = await db
-    .select()
-    .from(dashboardCards)
-    .where(eq(dashboardCards.isEnabled, 1))
-    .orderBy(asc(dashboardCards.sortOrder));
-} catch (error) {
-  console.error("Failed to fetch dashboard cards:", error);
-  cards = [];
-}
-
 try {
   links = await db
     .select()
@@ -236,14 +224,15 @@ const scriptData = {
   weekEnd: progress.weekEnd,
   holidayTarget: holidayTarget,
 };
+---
 
-// ===== 卡片渲染函数 =====
-function renderTimeCard(card: any) {
-  return `
+<Base title="仪表盘" description="信息聚合中心">
+  <div class="dashboard-grid">
+    <!-- 1. 北京时间 -->
     <div class="dashboard-card glass-panel">
       <div class="card-header">
-        <span class="card-icon">${card.icon || '🕐'}</span>
-        <span class="card-title">${card.title || '北京时间'}</span>
+        <span class="card-icon">🕐</span>
+        <span class="card-title">北京时间</span>
       </div>
       <div class="time-display">
         <div class="time-seconds" id="timeDisplay">
@@ -252,279 +241,209 @@ function renderTimeCard(card: any) {
         <div class="time-date" id="dateDisplay"></div>
       </div>
     </div>
-  `;
-}
 
-function renderHolidayCard(card: any) {
-  return `
+    <!-- 2. 下一个传统节日 -->
     <div class="dashboard-card glass-panel">
       <div class="card-header">
-        <span class="card-icon">${card.icon || '🎉'}</span>
-        <span class="card-title">${card.title || '下一个传统节日'}</span>
+        <span class="card-icon">🎉</span>
+        <span class="card-title">下一个传统节日</span>
       </div>
-      ${nextHoliday ? `
+      {nextHoliday ? (
         <div class="holiday-content">
-          <div class="holiday-name">${nextHoliday.name}</div>
+          <div class="holiday-name">{nextHoliday.name}</div>
           <div class="holiday-countdown">
-            还有 <strong>${nextHoliday.days_until}</strong> 天
+            还有 <strong>{nextHoliday.days_until}</strong> 天
           </div>
         </div>
-      ` : `<p class="empty-state">暂无节日数据</p>`}
+      ) : (
+        <p class="empty-state">暂无节日数据</p>
+      )}
     </div>
-  `;
-}
 
-function renderProgressCard(card: any) {
-  return `
+    <!-- 3. 日历 & 进度 -->
     <div class="dashboard-card glass-panel">
       <div class="card-header">
-        <span class="card-icon">${card.icon || '📅'}</span>
-        <span class="card-title">${card.title || '日历 & 进度'}</span>
+        <span class="card-icon">📅</span>
+        <span class="card-title">日历 & 进度</span>
       </div>
       <div class="calendar-content">
         <div class="progress-item">
-          <span id="yearLabel">本年剩余 <strong id="yearRemain">${progress.yearRemain}</strong> 天</span>
+          <span id="yearLabel">本年剩余 <strong id="yearRemain">{progress.yearRemain}</strong> 天</span>
           <div class="progress-bar">
-            <div class="progress-fill" id="yearProgressFill" style="width: ${progress.yearProgress}%;"></div>
+            <div class="progress-fill" id="yearProgressFill" style="width: {progress.yearProgress}%;"></div>
           </div>
-          <span class="progress-label" id="yearPercent">${progress.yearProgress}%</span>
+          <span class="progress-label" id="yearPercent">{progress.yearProgress}%</span>
         </div>
         <div class="progress-item">
-          <span id="monthLabel">本月剩余 <strong id="monthRemain">${progress.monthRemain}</strong> 天</span>
+          <span id="monthLabel">本月剩余 <strong id="monthRemain">{progress.monthRemain}</strong> 天</span>
           <div class="progress-bar">
-            <div class="progress-fill" id="monthProgressFill" style="width: ${progress.monthProgress}%;"></div>
+            <div class="progress-fill" id="monthProgressFill" style="width: {progress.monthProgress}%;"></div>
           </div>
-          <span class="progress-label" id="monthPercent">${progress.monthProgress}%</span>
+          <span class="progress-label" id="monthPercent">{progress.monthProgress}%</span>
         </div>
         <div class="progress-item">
-          <span id="weekLabel">本周剩余 <strong id="weekRemain">${progress.weekRemain}</strong> 天</span>
+          <span id="weekLabel">本周剩余 <strong id="weekRemain">{progress.weekRemain}</strong> 天</span>
           <div class="progress-bar">
-            <div class="progress-fill" id="weekProgressFill" style="width: ${progress.weekProgress}%;"></div>
+            <div class="progress-fill" id="weekProgressFill" style="width: {progress.weekProgress}%;"></div>
           </div>
-          <span class="progress-label" id="weekPercent">${progress.weekProgress}%</span>
+          <span class="progress-label" id="weekPercent">{progress.weekProgress}%</span>
         </div>
-        ${nextHoliday ? `
+        {nextHoliday && (
           <div class="next-holiday" id="holidayInfo">
-            🎉 距离 <strong>${nextHoliday.name}</strong> 还有 <strong id="holidayRemain">${nextHoliday.days_until}</strong> 天
+            🎉 距离 <strong>{nextHoliday.name}</strong> 还有 <strong id="holidayRemain">{nextHoliday.days_until}</strong> 天
           </div>
-        ` : ''}
+        )}
       </div>
     </div>
-  `;
-}
 
-function renderSayingCard(card: any) {
-  return `
+    <!-- 4. 今日一言 -->
     <div class="dashboard-card glass-panel">
       <div class="card-header">
-        <span class="card-icon">${card.icon || '💬'}</span>
-        <span class="card-title">${card.title || '今日一言'}</span>
+        <span class="card-icon">💬</span>
+        <span class="card-title">今日一言</span>
       </div>
-      <p class="saying-text">“${saying?.text || '加载中...'}”</p>
+      <p class="saying-text">“{saying?.text || '加载中...'}”</p>
     </div>
-  `;
-}
 
-function renderWeatherCard(card: any) {
-  return `
-    <div class="dashboard-card glass-panel weather-card">
+    <!-- 5. 今日天气（占2列） -->
+    <div class="dashboard-card glass-panel weather-card" style="grid-column: span 2;">
       <div class="card-header">
-        <span class="card-icon">${card.icon || '🌤️'}</span>
-        <span class="card-title">${card.title || '今日天气'} · ${location}</span>
+        <span class="card-icon">🌤️</span>
+        <span class="card-title">今日天气 · {location}</span>
       </div>
-      ${weather ? `
+      {weather ? (
         <div class="weather-content">
           <div class="weather-main">
             <div class="weather-temp-group">
-              <span class="weather-temp">${weather.temperature}°C</span>
-              <span class="weather-icon">${getWeatherEmoji(weather.weather_icon)}</span>
-              <span class="weather-desc">${weather.weather}</span>
+              <span class="weather-temp">{weather.temperature}°C</span>
+              <span class="weather-icon">{getWeatherEmoji(weather.weather_icon)}</span>
+              <span class="weather-desc">{weather.weather}</span>
             </div>
             <div class="weather-extras">
-              <span>🌡️ 体感 ${weather.feels_like}°C</span>
-              <span>💧 湿度 ${weather.humidity}%</span>
-              <span>🌬️ ${weather.wind_direction} ${weather.wind_power}</span>
+              <span>🌡️ 体感 {weather.feels_like}°C</span>
+              <span>💧 湿度 {weather.humidity}%</span>
+              <span>🌬️ {weather.wind_direction} {weather.wind_power}</span>
             </div>
           </div>
           <div class="weather-extended">
-            <span>👁️ 能见度 ${weather.visibility}km</span>
-            <span>📊 气压 ${weather.pressure}hPa</span>
-            <span>☀️ 紫外线 ${weather.uv}</span>
-            <span>🌧️ 降水量 ${weather.precipitation}mm</span>
-            <span>☁️ 云量 ${weather.cloud}%</span>
-            ${weather.aqi ? `<span style="display:inline-block; background: rgba(10,132,255,0.1); padding:0 8px; border-radius:12px; font-size:0.75rem;">空气质量 ${weather.aqi_category} (AQI ${weather.aqi})</span>` : ''}
+            <span>👁️ 能见度 {weather.visibility}km</span>
+            <span>📊 气压 {weather.pressure}hPa</span>
+            <span>☀️ 紫外线 {weather.uv}</span>
+            <span>🌧️ 降水量 {weather.precipitation}mm</span>
+            <span>☁️ 云量 {weather.cloud}%</span>
+            {weather.aqi && (
+              <span style="display:inline-block; background: rgba(10,132,255,0.1); padding:0 8px; border-radius:12px; font-size:0.75rem;">空气质量 {weather.aqi_category} (AQI {weather.aqi})</span>
+            )}
           </div>
-          ${weather.air_pollutants ? `
+          {weather.air_pollutants && (
             <div style="display:flex; flex-wrap:wrap; gap:0.3rem 0.8rem; font-size:0.7rem; color:var(--color-text-muted);">
-              <span>PM2.5: ${weather.air_pollutants.pm25}</span>
-              <span>PM10: ${weather.air_pollutants.pm10}</span>
-              <span>O₃: ${weather.air_pollutants.o3}</span>
-              <span>NO₂: ${weather.air_pollutants.no2}</span>
+              <span>PM2.5: {weather.air_pollutants.pm25}</span>
+              <span>PM10: {weather.air_pollutants.pm10}</span>
+              <span>O₃: {weather.air_pollutants.o3}</span>
+              <span>NO₂: {weather.air_pollutants.no2}</span>
             </div>
-          ` : ''}
-          ${weather.forecast ? `
+          )}
+          {weather.forecast && (
             <div style="margin-top:0.3rem;">
               <div style="font-size:0.7rem; font-weight:600; margin-bottom:0.2rem;">📅 7天预报</div>
               <div style="display:flex; gap:0.4rem; overflow-x:auto; padding-bottom:0.2rem;">
-                ${weather.forecast.map((day: any) => `
+                {weather.forecast.map((day: any) => (
                   <div style="flex:0 0 auto; min-width:44px; text-align:center; font-size:0.6rem; background:rgba(255,255,255,0.04); border-radius:8px; padding:2px 4px;">
-                    <div>${day.date.slice(5)}</div>
-                    <div>${day.temp_min}°~${day.temp_max}°</div>
+                    <div>{day.date.slice(5)}</div>
+                    <div>{day.temp_min}°~{day.temp_max}°</div>
                   </div>
-                `).join('')}
+                ))}
               </div>
             </div>
-          ` : ''}
-          ${weather.hourly_forecast ? `
+          )}
+          {weather.hourly_forecast && (
             <div style="margin-top:0.3rem;">
               <div style="font-size:0.7rem; font-weight:600; margin-bottom:0.2rem;">⏰ 逐小时</div>
               <div style="display:flex; gap:0.4rem; overflow-x:auto; padding-bottom:0.2rem;">
-                ${weather.hourly_forecast.slice(0, 8).map((hour: any) => `
+                {weather.hourly_forecast.slice(0, 8).map((hour: any) => (
                   <div style="flex:0 0 auto; min-width:36px; text-align:center; font-size:0.6rem; background:rgba(255,255,255,0.04); border-radius:6px; padding:2px 4px;">
-                    <div>${new Date(hour.time).getHours()}时</div>
-                    <div>${hour.temperature}°</div>
+                    <div>{new Date(hour.time).getHours()}时</div>
+                    <div>{hour.temperature}°</div>
                   </div>
-                `).join('')}
+                ))}
               </div>
             </div>
-          ` : ''}
-          ${weather.life_indices ? `
+          )}
+          {weather.life_indices && (
             <div style="margin-top:0.3rem;">
               <div style="font-size:0.7rem; font-weight:600; margin-bottom:0.2rem;">💡 生活指数</div>
               <div style="display:flex; flex-wrap:wrap; gap:0.2rem 0.6rem;">
-                ${Object.entries(weather.life_indices).map(([key, value]: [string, any]) => `
-                  <span style="font-size:0.6rem; background:rgba(255,255,255,0.04); padding:1px 6px; border-radius:10px; color:var(--color-text-muted);">${indexMap[key] || key}: ${value.brief}</span>
-                `).join('')}
+                {Object.entries(weather.life_indices).map(([key, value]: [string, any]) => (
+                  <span style="font-size:0.6rem; background:rgba(255,255,255,0.04); padding:1px 6px; border-radius:10px; color:var(--color-text-muted);">{indexMap[key] || key}: {value.brief}</span>
+                ))}
               </div>
             </div>
-          ` : ''}
+          )}
         </div>
-      ` : `<p class="empty-state">暂无天气数据</p>`}
+      ) : (
+        <p class="empty-state">暂无天气数据</p>
+      )}
     </div>
-  `;
-}
 
-function renderHotboardCard(card: any) {
-  return `
-    <div class="dashboard-card glass-panel">
+    <!-- 6. 热榜（占2列） -->
+    <div class="dashboard-card glass-panel" style="grid-column: span 2;">
       <div class="card-header">
-        <span class="card-icon">${card.icon || '🔥'}</span>
-        <span class="card-title">${card.title || '微博热榜'}</span>
+        <span class="card-icon">🔥</span>
+        <span class="card-title">微博热榜</span>
       </div>
-      ${hotboard?.list ? `
+      {hotboard?.list ? (
         <ol class="hot-list">
-          ${hotboard.list.slice(0, 10).map((item: any, i: number) => `
-            <li>
-              <a href="${item.url}" target="_blank" rel="noopener">
-                <span class="hot-index">${i + 1}</span>
-                <span class="hot-title">${item.title}</span>
-                <span class="hot-value">${item.hot_value}</span>
+          {hotboard.list.slice(0, 10).map((item: any, i: number) => (
+            <li key={i}>
+              <a href={item.url} target="_blank" rel="noopener">
+                <span class="hot-index">{i + 1}</span>
+                <span class="hot-title">{item.title}</span>
+                <span class="hot-value">{item.hot_value}</span>
               </a>
             </li>
-          `).join('')}
+          ))}
         </ol>
-      ` : `<p class="empty-state">暂无热榜数据</p>`}
+      ) : (
+        <p class="empty-state">暂无热榜数据</p>
+      )}
     </div>
-  `;
-}
 
-// ===== Links 卡片（全新样式：悬浮白色大圆角卡片） =====
-function renderLinksCard(card: any) {
-  if (links.length === 0) {
-    return `
-      <div class="dashboard-card glass-panel">
-        <div class="card-header">
-          <span class="card-icon">${card.icon || '🔗'}</span>
-          <span class="card-title">${card.title || '我的小站链接，欢迎到访哦！'}</span>
-        </div>
-        <p class="empty-state">暂无链接，请后台添加</p>
-      </div>
-    `;
-  }
-
-  const linksHtml = links.map((link) => `
-    <a
-      href="${link.url}"
-      target="_blank"
-      rel="noopener noreferrer"
-      class="link-card"
-    >
-      <div class="link-card-icon">
-        ${link.icon ? (link.icon.startsWith('http') ? `<img src="${link.icon}" alt="" />` : `<span>${link.icon}</span>`) : `<span>🔗</span>`}
-      </div>
-      <div class="link-card-body">
-        <div class="link-card-title">${link.title}</div>
-        <div class="link-card-desc">${link.description || '点击访问'}</div>
-      </div>
-      <div class="link-card-footer">
-        <span class="link-card-tag" style="background: rgba(10,132,255,0.1); color: var(--color-accent);">快捷访问</span>
-        <span class="link-card-arrow">→</span>
-      </div>
-    </a>
-  `).join('');
-
-  return `
-    <div class="dashboard-card glass-panel">
+    <!-- 7. Links 区域（占满4列） -->
+    <div class="dashboard-card glass-panel" style="grid-column: 1 / -1;">
       <div class="card-header">
-        <span class="card-icon">${card.icon || '🔗'}</span>
-        <span class="card-title">${card.title || '我的小站链接，欢迎到访哦！'}</span>
+        <span class="card-icon">🔗</span>
+        <span class="card-title">我的小站链接，欢迎到访哦！</span>
       </div>
-      <div class="links-grid-new">
-        ${linksHtml}
-      </div>
+      {links.length > 0 ? (
+        <div class="links-grid">
+          {links.map((link) => (
+            <a
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="link-item"
+            >
+              <div class="link-icon">
+                {link.icon ? (
+                  link.icon.startsWith('http') ? (
+                    <img src={link.icon} alt="" />
+                  ) : (
+                    <span>{link.icon}</span>
+                  )
+                ) : (
+                  <span>🔗</span>
+                )}
+              </div>
+              <span class="link-title">{link.title}</span>
+              <span class="link-arrow">→</span>
+            </a>
+          ))}
+        </div>
+      ) : (
+        <p class="empty-state">暂无链接，请后台添加</p>
+      )}
     </div>
-  `;
-}
-
-function getCardColumns(card: any): number {
-  if (card.sizePreset === 'small') return 1;
-  if (card.sizePreset === 'medium') return 2;
-  if (card.sizePreset === 'large') return 3;
-  if (card.sizePreset === 'xlarge') return 4;
-  if (card.sizePreset === 'custom' && card.width) return card.width;
-  return 1;
-}
-
-function renderCard(card: any): string {
-  try {
-    const columns = getCardColumns(card);
-    const spanStyle = `style="grid-column: span ${columns};"`;
-    let content = '';
-
-    switch (card.cardKey) {
-      case 'time': content = renderTimeCard(card); break;
-      case 'holiday': content = renderHolidayCard(card); break;
-      case 'progress': content = renderProgressCard(card); break;
-      case 'saying': content = renderSayingCard(card); break;
-      case 'weather': content = renderWeatherCard(card); break;
-      case 'hotboard': content = renderHotboardCard(card); break;
-      case 'links': content = renderLinksCard(card); break;
-      default:
-        const template = card.contentTemplate || '<p class="empty-state">自定义卡片内容为空</p>';
-        const rendered = template
-          .replace(/\{\{data\.title\}\}/g, card.title || '')
-          .replace(/\{\{data\.icon\}\}/g, card.icon || '');
-        content = `
-          <div class="dashboard-card glass-panel">
-            <div class="card-header">
-              <span class="card-icon">${card.icon || '📦'}</span>
-              <span class="card-title">${card.title || '自定义卡片'}</span>
-            </div>
-            ${rendered}
-          </div>
-        `;
-    }
-    return `<div ${spanStyle}>${content}</div>`;
-  } catch (error) {
-    console.error("Error rendering card:", card.cardKey, error);
-    return `<div style="grid-column: span 1;"><div class="dashboard-card glass-panel"><p class="empty-state">卡片渲染出错</p></div></div>`;
-  }
-}
----
-
-<Base title="仪表盘" description="信息聚合中心">
-  <!-- 关键修复：使用 set:html 注入卡片 HTML，避免 {@html} 解析错误 -->
-  <div class="dashboard-grid" set:html={cards.length > 0 ? cards.map(card => renderCard(card)).join('') : '<p class="empty-state" style="grid-column: 1 / -1; text-align:center; padding:2rem;">暂无卡片，请后台添加</p>'} />
+  </div>
 </Base>
 
 <style>
@@ -602,108 +521,67 @@ function renderCard(card: any): string {
   .progress-label { font-size: 0.7rem; color: var(--color-text-muted); }
   .next-holiday { margin-top: 0.3rem; padding: 0.3rem 0.6rem; background: var(--color-accent-soft); border-radius: var(--radius-inner); text-align: center; font-size: 0.85rem; }
 
-  /* ==== Links 新样式（悬浮白色大圆角卡片） ==== */
-  .links-grid-new {
+  .links-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.8rem;
   }
 
-  .link-card {
+  .link-item {
     display: flex;
-    flex-direction: column;
-    padding: 1.2rem 1.2rem 1rem;
-    border-radius: 20px;
-    background: rgba(255, 255, 255, 0.85);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.6rem 0.8rem;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
     text-decoration: none;
     color: var(--color-text);
     transition: all 0.25s ease;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
   }
 
-  :global([data-theme="dark"]) .link-card {
-    background: rgba(30, 40, 60, 0.7);
-    border-color: rgba(255, 255, 255, 0.06);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  .link-item:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(10,132,255,0.25);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
   }
 
-  .link-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
-    border-color: rgba(10, 132, 255, 0.2);
-  }
-
-  .link-card-icon {
-    width: 40px;
-    height: 40px;
+  .link-icon {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.4rem;
-    border-radius: 12px;
-    background: rgba(10, 132, 255, 0.06);
-    margin-bottom: 0.6rem;
-    flex-shrink: 0;
+    font-size: 1.1rem;
+    border-radius: 6px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.04);
   }
 
-  .link-card-icon img {
+  .link-icon img {
     width: 100%;
     height: 100%;
     object-fit: contain;
-    border-radius: 8px;
   }
 
-  .link-card-body {
+  .link-title {
     flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-    margin-bottom: 0.6rem;
-  }
-
-  .link-card-title {
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: var(--color-text);
-    line-height: 1.3;
-  }
-
-  .link-card-desc {
-    font-size: 0.78rem;
-    color: var(--color-text-muted);
-    line-height: 1.4;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  .link-card-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border-top: 1px solid var(--color-border);
-    padding-top: 0.6rem;
-  }
-
-  .link-card-tag {
-    font-size: 0.65rem;
-    padding: 0.15rem 0.6rem;
-    border-radius: 999px;
+    font-size: 0.85rem;
     font-weight: 500;
-    letter-spacing: 0.02em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .link-card-arrow {
-    font-size: 0.8rem;
+  .link-arrow {
+    font-size: 0.7rem;
     color: var(--color-text-muted);
     transition: transform 0.2s;
   }
 
-  .link-card:hover .link-card-arrow {
+  .link-item:hover .link-arrow {
     transform: translateX(4px);
     color: var(--color-accent);
   }
@@ -715,7 +593,6 @@ function renderCard(card: any): string {
   }
   @media (max-width: 640px) {
     .dashboard-grid { grid-template-columns: 1fr; }
-    .links-grid-new { grid-template-columns: 1fr; }
   }
 </style>
 
