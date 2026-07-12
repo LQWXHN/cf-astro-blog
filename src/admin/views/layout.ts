@@ -12,7 +12,7 @@ type AdminNavKey =
 	| "mentions"
 	| "media"
 	| "analytics"
-	| "tools"; 
+	| "tools"
 	| "dashboard-links";
 
 const navItems: Array<{ key: AdminNavKey; label: string; href: string }> = [
