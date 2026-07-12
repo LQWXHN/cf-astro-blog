@@ -13,7 +13,7 @@ type AdminNavKey =
 	| "media"
 	| "analytics"
 	| "tools"; 
-	| "dashboard-links"; 
+	| "dashboard-links";
 
 const navItems: Array<{ key: AdminNavKey; label: string; href: string }> = [
 	{ key: "dashboard", label: "控制台", href: "/api/admin" },
