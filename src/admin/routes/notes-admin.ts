@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { asc, eq, sql } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 import { notes } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { escapeAttribute, escapeHtml } from "@/lib/security";
@@ -132,7 +132,7 @@ notesAdmin.get("/", async (c) => {
         </table>
       </div>
 
-      <!-- CSRF token 存在隐藏字段中，供 JS 读取 -->
+      <!-- CSRF token 存在隐藏字段中 -->
       <input type="hidden" id="csrfToken" value="${escapeAttribute(session.csrfToken)}" />
 
       <script>
@@ -187,7 +187,7 @@ notesAdmin.get("/", async (c) => {
             cb.addEventListener('change', updateSelectedCount);
           });
 
-          // ===== 批量删除提交（使用 JSON 格式，从隐藏字段读取 CSRF） =====
+          // ===== 批量删除提交 =====
           batchConfirmDelete.addEventListener('click', function(e) {
             e.preventDefault();
 
@@ -202,13 +202,11 @@ notesAdmin.get("/", async (c) => {
               return;
             }
 
-            // 收集选中的 ID
             const ids = [];
             checked.forEach(cb => {
               ids.push(parseInt(cb.value, 10));
             });
 
-            // 使用 JSON 格式提交
             fetch('/api/admin/notes-admin/batch-delete', {
               method: 'POST',
               headers: {
@@ -271,7 +269,7 @@ notesAdmin.post("/add", async (c) => {
   }
 });
 
-// ===== 批量删除（接收 JSON） =====
+// ===== 批量删除（使用 inArray） =====
 notesAdmin.post("/batch-delete", async (c) => {
   try {
     const session = getAuthenticatedSession(c);
@@ -292,8 +290,8 @@ notesAdmin.post("/batch-delete", async (c) => {
     }
 
     const db = getDb(c.env.DB);
-    // 使用 SQL IN 一次性删除所有
-    await db.delete(notes).where(sql`id IN (${idList.join(',')})`);
+    // 使用 inArray 批量删除
+    await db.delete(notes).where(inArray(notes.id, idList));
     return c.redirect("/api/admin/notes-admin");
   } catch (error: any) {
     console.error("批量删除错误:", error);
