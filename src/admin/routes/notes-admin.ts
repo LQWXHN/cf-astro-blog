@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { desc, eq, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { notes } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { escapeAttribute, escapeHtml } from "@/lib/security";
@@ -20,8 +20,8 @@ notesAdmin.get("/", async (c) => {
   try {
     const session = getAuthenticatedSession(c);
     const db = getDb(c.env.DB);
-    
-    // 统计数据（修复：createdAt → created_at）
+
+    // 统计数据
     const stats = await db
       .select({
         total: sql<number>`count(*)`.as("total"),
@@ -33,17 +33,19 @@ notesAdmin.get("/", async (c) => {
 
     const stat = stats[0] || { total: 0, today: 0, approved: 0, pending: 0 };
 
-    // 获取所有便签（按时间降序）
+    // 按内容首字母升序（A-Z）
     const allNotes = await db
       .select()
       .from(notes)
-      .orderBy(desc(notes.createdAt));
+      .orderBy(asc(notes.content));
 
     const rowsHtml = allNotes.length === 0
       ? `<tr><td colspan="6" class="empty-state">暂无便签</td></tr>`
       : allNotes.map(note => `
-          <tr>
-            <td><input type="checkbox" class="note-checkbox" name="ids" value="${note.id}" /></td>
+          <tr data-id="${note.id}">
+            <td class="batch-checkbox" style="display:none;">
+              <input type="checkbox" class="note-checkbox" name="ids" value="${note.id}" />
+            </td>
             <td>${escapeHtml(note.content)}</td>
             <td>${escapeHtml(note.colorTheme || '默认')}</td>
             <td>
@@ -87,18 +89,25 @@ notesAdmin.get("/", async (c) => {
           </select>
           <button type="submit" class="btn btn-primary">添加便签</button>
         </form>
-        <form method="post" action="/api/admin/notes-admin/batch-delete" style="display:inline-flex; gap:0.3rem; align-items:center;">
-          <input type="hidden" name="_csrf" value="${escapeAttribute(session.csrfToken)}" />
-          <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确认删除选中的便签吗？')">批量删除</button>
-        </form>
+        <button id="batchDeleteBtn" class="btn btn-danger">批量删除</button>
+        <span id="batchStatus" style="font-size:0.85rem; color:var(--text-muted); display:none;">已选 <span id="selectedCount">0</span> 条</span>
+      </div>
+
+      <!-- 底部操作栏（批量模式） -->
+      <div id="batchActions" style="display:none; margin-top:0.5rem; padding:0.5rem 1rem; background:var(--bg-tertiary); border-radius:var(--radius); border:1px solid var(--border); align-items:center; gap:1rem; flex-wrap:wrap;">
+        <span style="font-weight:600;">已选择 <span id="batchSelectedCount">0</span> 条便签</span>
+        <div style="display:flex; gap:0.5rem;">
+          <button id="batchConfirmDelete" class="btn btn-danger">删除选中</button>
+          <button id="batchCancel" class="btn">取消</button>
+        </div>
       </div>
 
       <!-- 表格 -->
       <div class="table-card">
-        <table class="data-table">
+        <table class="data-table" id="notesTable">
           <thead>
             <tr>
-              <th><input type="checkbox" id="selectAll" /></th>
+              <th class="batch-checkbox" style="display:none;"><input type="checkbox" id="selectAll" /></th>
               <th>内容</th>
               <th>颜色</th>
               <th>状态</th>
@@ -111,9 +120,87 @@ notesAdmin.get("/", async (c) => {
       </div>
 
       <script>
-        document.getElementById('selectAll')?.addEventListener('change', function(e) {
-          document.querySelectorAll('.note-checkbox').forEach(cb => cb.checked = e.target.checked);
-        });
+        (function() {
+          const batchDeleteBtn = document.getElementById('batchDeleteBtn');
+          const batchActions = document.getElementById('batchActions');
+          const batchCancel = document.getElementById('batchCancel');
+          const batchConfirmDelete = document.getElementById('batchConfirmDelete');
+          const batchStatus = document.getElementById('batchStatus');
+          const selectedCountSpan = document.getElementById('selectedCount');
+          const batchSelectedCountSpan = document.getElementById('batchSelectedCount');
+          const checkboxes = document.querySelectorAll('.note-checkbox');
+          const selectAll = document.getElementById('selectAll');
+          let isBatchMode = false;
+
+          function toggleBatchMode(show) {
+            isBatchMode = show;
+            document.querySelectorAll('.batch-checkbox').forEach(el => {
+              el.style.display = show ? '' : 'none';
+            });
+            batchActions.style.display = show ? 'flex' : 'none';
+            batchStatus.style.display = show ? 'inline' : 'none';
+            if (!show) {
+              checkboxes.forEach(cb => cb.checked = false);
+              if (selectAll) selectAll.checked = false;
+              updateSelectedCount();
+            }
+          }
+
+          function updateSelectedCount() {
+            const checked = document.querySelectorAll('.note-checkbox:checked');
+            const count = checked.length;
+            selectedCountSpan.textContent = count;
+            batchSelectedCountSpan.textContent = count;
+          }
+
+          batchDeleteBtn.addEventListener('click', function() {
+            toggleBatchMode(true);
+          });
+
+          batchCancel.addEventListener('click', function() {
+            toggleBatchMode(false);
+          });
+
+          if (selectAll) {
+            selectAll.addEventListener('change', function() {
+              checkboxes.forEach(cb => cb.checked = this.checked);
+              updateSelectedCount();
+            });
+          }
+
+          checkboxes.forEach(cb => {
+            cb.addEventListener('change', updateSelectedCount);
+          });
+
+          batchConfirmDelete.addEventListener('click', function() {
+            const checked = document.querySelectorAll('.note-checkbox:checked');
+            if (checked.length === 0) {
+              alert('请选择要删除的便签');
+              return;
+            }
+            if (confirm('确认删除选中的 ' + checked.length + ' 条便签吗？此操作不可撤销！')) {
+              const form = document.createElement('form');
+              form.method = 'POST';
+              form.action = '/api/admin/notes-admin/batch-delete';
+              const csrfInput = document.createElement('input');
+              csrfInput.type = 'hidden';
+              csrfInput.name = '_csrf';
+              csrfInput.value = '${escapeAttribute(session.csrfToken)}';
+              form.appendChild(csrfInput);
+              checked.forEach(cb => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'ids';
+                input.value = cb.value;
+                form.appendChild(input);
+              });
+              document.body.appendChild(form);
+              form.submit();
+            }
+          });
+
+          toggleBatchMode(false);
+        })();
       </script>
     `;
 
@@ -166,7 +253,6 @@ notesAdmin.post("/batch-delete", async (c) => {
     const idList = Array.isArray(ids) ? ids.map(Number).filter(n => !isNaN(n)) : [];
     if (idList.length === 0) return c.text("请选择要删除的便签", 400);
     const db = getDb(c.env.DB);
-    // 使用 inArray 替代 sql 模板，更安全
     for (const id of idList) {
       await db.delete(notes).where(eq(notes.id, id));
     }

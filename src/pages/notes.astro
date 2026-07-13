@@ -8,6 +8,17 @@ import Base from "@/layouts/Base.astro";
   <!-- 底部输入框 -->
   <div id="note-input-container">
     <input id="note-input" type="text" placeholder="写下你想说的话..." maxlength="30" />
+    <div class="color-picker-wrapper">
+      <span class="color-label">颜色</span>
+      <div class="color-options" id="colorOptions">
+        <span class="color-swatch active" data-color="#fef3c7" style="background:#fef3c7; border-color:#f59e0b;"></span>
+        <span class="color-swatch" data-color="#dbeafe" style="background:#dbeafe; border-color:#3b82f6;"></span>
+        <span class="color-swatch" data-color="#d1fae5" style="background:#d1fae5; border-color:#10b981;"></span>
+        <span class="color-swatch" data-color="#fce7f3" style="background:#fce7f3; border-color:#ec4899;"></span>
+        <span class="color-swatch" data-color="#ede9fe" style="background:#ede9fe; border-color:#8b5cf6;"></span>
+        <span class="color-swatch" data-color="#fed7aa" style="background:#fed7aa; border-color:#f97316;"></span>
+      </div>
+    </div>
     <button id="note-submit">添加</button>
     <span id="char-count">0/30</span>
   </div>
@@ -186,6 +197,45 @@ import Base from "@/layouts/Base.astro";
     background: linear-gradient(45deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.4) 45%, transparent 45%, transparent 55%, rgba(0,0,0,0.4) 55%, rgba(0,0,0,0.4) 100%);
   }
 
+  /* ===== 颜色选择器 ===== */
+  .color-picker-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .color-label {
+    font-size: 12px;
+    color: rgba(0,0,0,0.4);
+    margin-right: 2px;
+  }
+  .color-options {
+    display: flex;
+    gap: 4px;
+  }
+  .color-swatch {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .color-swatch:hover {
+    transform: scale(1.1);
+  }
+  .color-swatch.active {
+    border-color: #333;
+    box-shadow: 0 0 0 2px rgba(0,0,0,0.1);
+  }
+  [data-theme="dark"] .color-swatch.active {
+    border-color: #fff;
+  }
+  [data-theme="dark"] .color-label {
+    color: rgba(255,255,255,0.4);
+  }
+
   /* ===== 底部输入框 ===== */
   #note-input-container {
     position: fixed;
@@ -221,7 +271,7 @@ import Base from "@/layouts/Base.astro";
     outline: none;
     background: rgba(255, 255, 255, 0.2);
     color: var(--color-text, #333);
-    min-width: 260px;
+    min-width: 200px;
     transition: all 0.2s ease;
     font-family: inherit;
   }
@@ -305,6 +355,13 @@ import Base from "@/layouts/Base.astro";
     color: rgba(255, 255, 255, 0.3);
   }
 
+  [data-theme="dark"] .color-swatch.active {
+    border-color: #fff;
+  }
+  [data-theme="dark"] .color-label {
+    color: rgba(255,255,255,0.4);
+  }
+
   /* ===== 响应式 ===== */
   @media (max-width: 768px) {
     .card {
@@ -318,18 +375,64 @@ import Base from "@/layouts/Base.astro";
     #note-input-container {
       bottom: 20px;
       padding: 8px 12px;
-      gap: 8px;
+      gap: 6px;
       width: calc(100% - 32px);
       border-radius: 14px;
+      flex-wrap: wrap;
+      justify-content: center;
     }
     #note-input {
-      min-width: 100px;
+      min-width: 120px;
       font-size: 14px;
       padding: 8px 12px;
+      flex: 1 1 140px;
     }
     #note-submit {
       font-size: 14px;
       padding: 8px 14px;
+    }
+    .color-picker-wrapper {
+      gap: 4px;
+    }
+    .color-swatch {
+      width: 22px;
+      height: 22px;
+    }
+    .color-label {
+      font-size: 10px;
+    }
+    .color-options {
+      gap: 3px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    #note-input-container {
+      bottom: 12px;
+      padding: 6px 10px;
+      gap: 4px;
+      width: calc(100% - 16px);
+      border-radius: 12px;
+    }
+    #note-input {
+      min-width: 80px;
+      font-size: 13px;
+      padding: 6px 10px;
+    }
+    #note-submit {
+      font-size: 13px;
+      padding: 6px 12px;
+    }
+    .color-swatch {
+      width: 18px;
+      height: 18px;
+    }
+    .color-label {
+      font-size: 9px;
+    }
+    #char-count {
+      font-size: 10px;
+      min-width: 24px;
     }
   }
 </style>
@@ -348,13 +451,22 @@ import Base from "@/layouts/Base.astro";
     red: '#fecaca',
     gray: '#e5e7eb',
   };
-  const THEMES = ['yellow', 'blue', 'green', 'pink', 'purple', 'orange'];
 
   const cardStates = new WeakMap();
   let activeMaximizedCard = null;
   let zIndexCursor = 200;
   const MAXIMIZED_LAYER = 1000000;
   let isMobile = window.matchMedia('(pointer: coarse)').matches || window.innerWidth <= 768;
+  let selectedColor = '#fef3c7';
+
+  // ===== 颜色选择器 =====
+  document.querySelectorAll('.color-swatch').forEach(el => {
+    el.addEventListener('click', function() {
+      document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+      this.classList.add('active');
+      selectedColor = this.dataset.color;
+    });
+  });
 
   function randomFrom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
   function clamp(v, min, max) { return Math.min(Math.max(v, min), max); }
@@ -539,56 +651,63 @@ import Base from "@/layouts/Base.astro";
   }
 
   // ===== 从 API 加载便签（分批出现） =====
-async function fetchNotes() {
-  try {
-    const res = await fetch('/api/notes');
-    const data = await res.json();
-    if (Array.isArray(data) && data.length > 0) {
-      const batchSize = 4;        // 每批显示 4 张
-      let index = 0;
-      
-      const interval = setInterval(() => {
-        // 取当前批次的卡片
-        const batch = data.slice(index, index + batchSize);
-        if (batch.length === 0) {
-          clearInterval(interval);
-          return;
-        }
-        
-        // 批量创建
-        batch.forEach(note => {
-          const color = COLOR_MAP[note.colorTheme] || '#f3f4f6';
-          createCard(note.content, color, note.positionLeft, note.positionTop, note.rotation);
-        });
-        
-        index += batchSize;
-      }, 300); // 每批间隔 300ms
+  async function fetchNotes() {
+    try {
+      const res = await fetch('/api/notes');
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const batchSize = 4;
+        let index = 0;
+        const interval = setInterval(() => {
+          const batch = data.slice(index, index + batchSize);
+          if (batch.length === 0) {
+            clearInterval(interval);
+            return;
+          }
+          batch.forEach(note => {
+            const color = note.color || '#fef3c7';
+            createCard(note.content, color, note.positionLeft, note.positionTop, note.rotation);
+          });
+          index += batchSize;
+        }, 300);
+      }
+    } catch (e) {
+      console.error('加载便签失败:', e);
     }
-  } catch (e) {
-    console.error('加载便签失败:', e);
   }
-}
 
-  // ===== 创建卡片 =====
+  // ===== 创建卡片（均匀分布） =====
   function createCard(message, color, posLeft, posTop, rotation) {
     const card = document.createElement('div');
     card.className = 'card';
 
-    const bgColor = color || randomFrom(Object.values(COLOR_MAP));
+    const bgColor = color || '#fef3c7';
     const angle = rotation ?? (Math.random() - 0.5) * 8;
     const cardWidth = isMobile ? 170 : 220;
     const cardHeight = isMobile ? 130 : 140;
-    const hm = isMobile ? 12 : 16;
-    const vm = isMobile ? 12 : 20;
 
-    const left = posLeft !== undefined ? (posLeft / 100 * (window.innerWidth - cardWidth)) : 
-                 (hm + Math.random() * Math.max(window.innerWidth - cardWidth - hm * 2, 0));
-    const top = posTop !== undefined ? (posTop / 100 * (window.innerHeight - cardHeight)) :
-                (vm + Math.random() * Math.max(window.innerHeight - cardHeight - vm * 2, 0));
+    // 均匀分布：根据已有卡片数量计算网格位置
+    const existingCards = board.querySelectorAll('.card').length;
+    const cols = Math.max(1, Math.floor((window.innerWidth - 20) / (cardWidth + 10)));
+    const rows = Math.max(1, Math.floor((window.innerHeight - 80) / (cardHeight + 10)));
+    const totalSlots = cols * rows;
+    const slotIndex = existingCards % Math.max(totalSlots, 1);
+    const col = slotIndex % cols;
+    const row = Math.floor(slotIndex / cols);
+    
+    // 在网格单元内添加随机偏移
+    const offsetX = (Math.random() - 0.5) * cardWidth * 0.25;
+    const offsetY = (Math.random() - 0.5) * cardHeight * 0.25;
+    const left = col * (cardWidth + 10) + 10 + offsetX;
+    const top = row * (cardHeight + 10) + 10 + offsetY;
+
+    // 边界保护
+    const finalLeft = Math.max(10, Math.min(window.innerWidth - cardWidth - 10, left));
+    const finalTop = Math.max(10, Math.min(window.innerHeight - cardHeight - 10, top));
 
     card.style.background = bgColor;
-    card.style.left = left + 'px';
-    card.style.top = top + 'px';
+    card.style.left = finalLeft + 'px';
+    card.style.top = finalTop + 'px';
     card.style.zIndex = ++zIndexCursor;
 
     card.innerHTML = `
@@ -605,10 +724,10 @@ async function fetchNotes() {
 
     const state = {
       angle, scale: isMobile ? 0.85 : 0.7,
-      left, top,
+      left: finalLeft, top: finalTop,
       maximized: false,
       closing: false,
-      lastPosition: { left, top }
+      lastPosition: { left: finalLeft, top: finalTop }
     };
 
     cardStates.set(card, state);
@@ -624,7 +743,7 @@ async function fetchNotes() {
     setupCardInteractions(card);
   }
 
-  // ===== 提交便签 =====
+  // ===== 提交便签（使用选中的颜色） =====
   async function sendNote() {
     const input = document.getElementById('note-input');
     const text = input.value.trim();
@@ -634,12 +753,11 @@ async function fetchNotes() {
       const res = await fetch('/api/notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: text })
+        body: JSON.stringify({ content: text, color: selectedColor })
       });
       const result = await res.json();
       if (result.success) {
-        const color = randomFrom(Object.values(COLOR_MAP));
-        createCard(text, color);
+        createCard(text, selectedColor);
         input.value = '';
         updateCharCount();
       } else {
