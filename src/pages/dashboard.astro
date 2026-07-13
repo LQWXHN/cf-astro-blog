@@ -29,29 +29,109 @@ const indexMap: Record<string, string> = {
   pollen: '花粉',
 };
 
-// ===== 🆕 通过 UAPI IPinfo 获取精确地理位置（精确到区县） =====
+// ===== 🆕 硬编码传统节日列表（2026年） =====
+const HOLIDAYS: Array<{ name: string; date: string }> = [
+  { name: '元旦', date: '2026-01-01' },
+  { name: '春节', date: '2026-02-17' },
+  { name: '清明节', date: '2026-04-04' },
+  { name: '劳动节', date: '2026-05-01' },
+  { name: '端午节', date: '2026-05-31' },
+  { name: '中秋节', date: '2026-10-04' },
+  { name: '国庆节', date: '2026-10-01' },
+];
+
+// ===== 计算距离最近的传统节日 =====
+function getNextHoliday() {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  today.setHours(0, 0, 0, 0);
+  
+  let closest = null;
+  let closestDays = Infinity;
+  
+  // 先尝试当年
+  for (const holiday of HOLIDAYS) {
+    const parts = holiday.date.split('-').map(Number);
+    const holidayDate = new Date(parts[0], parts[1] - 1, parts[2]);
+    holidayDate.setHours(0, 0, 0, 0);
+    
+    if (holidayDate.getTime() >= today.getTime()) {
+      const diffMs = holidayDate.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      if (diffDays < closestDays) {
+        closestDays = diffDays;
+        closest = { ...holiday, days_until: diffDays };
+      }
+    }
+  }
+  
+  // 如果当年没有更多节日，检查次年
+  if (!closest) {
+    const nextYear = now.getFullYear() + 1;
+    for (const holiday of HOLIDAYS) {
+      const parts = holiday.date.split('-').map(Number);
+      const holidayDate = new Date(nextYear, parts[1] - 1, parts[2]);
+      holidayDate.setHours(0, 0, 0, 0);
+      const diffMs = holidayDate.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      if (diffDays < closestDays) {
+        closestDays = diffDays;
+        closest = { ...holiday, days_until: diffDays };
+      }
+    }
+  }
+  
+  return closest;
+}
+
+// ===== 通过 UAPI IPinfo 获取精确地理位置 =====
 async function fetchLocationByIP() {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch('https://uapis.cn/api/v1/network/ipinfo');
+    const res = await fetch('https://uapis.cn/api/v1/network/ipinfo', {
+      signal: controller.signal,
+    });
     clearTimeout(timeoutId);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) throw new Error(`UAPI HTTP ${res.status}`);
     const data = await res.json();
-    const { district, city, region } = data.data || {};
-    const location = district || city || region;
-    if (location && location !== '未知' && location !== '') {
-      return location;
+    console.log('📍 UAPI IPinfo 响应:', JSON.stringify(data));
+    
+    if (data && data.code === 200 && data.data) {
+      const { district, city, region } = data.data;
+      const location = district || city || region;
+      if (location && location !== '未知' && location !== '' && location !== 'None') {
+        return location;
+      }
     }
-    // 降级：使用 Cloudflare 头信息
-    const cfCity = Astro.request.headers.get("cf-city") || "";
-    const cfRegion = Astro.request.headers.get("cf-region") || "";
-    return cfCity || cfRegion || "北京";
-  } catch {
-    const cfCity = Astro.request.headers.get("cf-city") || "";
-    const cfRegion = Astro.request.headers.get("cf-region") || "";
-    return cfCity || cfRegion || "北京";
+  } catch (error) {
+    console.error('UAPI IP查询失败:', error);
   }
+
+  // 备选：ip-api.com
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch('https://ip-api.com/json/', {
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!res.ok) throw new Error(`ip-api HTTP ${res.status}`);
+    const data = await res.json();
+    console.log('📍 ip-api 响应:', JSON.stringify(data));
+    
+    if (data && data.status === 'success') {
+      const { city, regionName } = data;
+      return city || regionName || '北京';
+    }
+  } catch (error) {
+    console.error('ip-api 查询失败:', error);
+  }
+
+  // 降级：使用 Cloudflare 头信息
+  const cfCity = Astro.request.headers.get("cf-city") || "";
+  const cfRegion = Astro.request.headers.get("cf-region") || "";
+  return cfCity || cfRegion || "北京";
 }
 
 // ===== 获取天气数据（每4小时缓存） =====
@@ -111,26 +191,12 @@ async function fetchHotboard() {
   }
 }
 
-// ===== 获取节假日 =====
+// ===== 🆕 获取节日（硬编码，不再调用 API） =====
 async function fetchHoliday() {
-  try {
-    const now = new Date();
-    const today = now.toISOString().split("T")[0];
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
-    const res = await fetch(
-      `https://uapis.cn/api/v1/misc/holiday-calendar?date=${today}&include_nearby=true&nearby_limit=10&exclude_past=true&timezone=Asia/Shanghai`,
-      {
-        headers: { Authorization: `Bearer ${UAPI_KEY}` },
-        signal: controller.signal,
-      }
-    );
-    clearTimeout(timeoutId);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } catch {
-    return null;
-  }
+  // 直接计算下一个节日
+  const next = getNextHoliday();
+  console.log('🎉 下一个节日:', next);
+  return { nearby: next ? [next] : [] };
 }
 
 // ===== 获取一言（每天00:00更新） =====
@@ -162,7 +228,7 @@ async function fetchSaying(env: any) {
   }
 }
 
-// ===== 计算日期进度（修正版） =====
+// ===== 计算日期进度 =====
 function getDateProgress() {
   const now = new Date();
   // 年度
@@ -179,22 +245,25 @@ function getDateProgress() {
   const monthElapsed = now.getTime() - monthStart.getTime();
   const monthProgress = (monthElapsed / monthTotal) * 100;
 
-  // 周度（以周一为第一天）
+  // 周度：距离下周一
   const dayOfWeek = now.getDay() || 7;
+  const nextMonday = new Date(now);
+  const daysUntilMonday = dayOfWeek === 1 ? 7 : 8 - dayOfWeek;
+  nextMonday.setDate(now.getDate() + daysUntilMonday);
+  nextMonday.setHours(0, 0, 0, 0);
+  
   const weekStart = new Date(now);
   weekStart.setDate(now.getDate() - (dayOfWeek - 1));
   weekStart.setHours(0, 0, 0, 0);
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 7);
-  weekEnd.setHours(0, 0, 0, 0);
-  const weekTotal = weekEnd.getTime() - weekStart.getTime();
+  
+  const weekTotal = nextMonday.getTime() - weekStart.getTime();
   const weekElapsed = now.getTime() - weekStart.getTime();
   const weekProgress = (weekElapsed / weekTotal) * 100;
 
   // 剩余时间（精确到秒）
   const yearRemainMs = yearEnd.getTime() - now.getTime();
   const monthRemainMs = monthEnd.getTime() - now.getTime();
-  const weekRemainMs = weekEnd.getTime() - now.getTime();
+  const weekRemainMs = nextMonday.getTime() - now.getTime();
 
   function formatRemain(ms: number): string {
     if (ms <= 0) return '已结束';
@@ -222,7 +291,7 @@ function getDateProgress() {
     monthStart: monthStart.getTime(),
     monthEnd: monthEnd.getTime(),
     weekStart: weekStart.getTime(),
-    weekEnd: weekEnd.getTime(),
+    weekEnd: nextMonday.getTime(),
   };
 }
 
@@ -242,6 +311,7 @@ function getWeatherEmoji(code: string): string {
 
 // ===== 获取数据 =====
 const location = await fetchLocationByIP();
+console.log('📍 最终定位结果:', location);
 const db = getDb(env.DB);
 
 // 获取 Links 数据
@@ -265,8 +335,10 @@ const [weather, hotboard, holiday, saying] = await Promise.all([
 ]);
 
 const progress = getDateProgress();
-const nextHoliday = holiday?.nearby?.[0];
+const nextHoliday = holiday?.nearby?.[0] || null;
 const holidayTarget = nextHoliday ? new Date(nextHoliday.date).getTime() : null;
+
+console.log('🎉 下一个节日:', nextHoliday);
 
 const scriptData = {
   yearStart: progress.yearStart,
@@ -295,7 +367,7 @@ const scriptData = {
       </div>
     </div>
 
-    <!-- 2. 距离最近的传统节日（改名） -->
+    <!-- 2. 距离最近的传统节日 -->
     <div class="dashboard-card glass-panel">
       <div class="card-header">
         <span class="card-icon">🎉</span>
@@ -313,7 +385,7 @@ const scriptData = {
       )}
     </div>
 
-    <!-- 3. 日历 & 进度（修正显示格式） -->
+    <!-- 3. 日历 & 进度 -->
     <div class="dashboard-card glass-panel">
       <div class="card-header">
         <span class="card-icon">📅</span>
@@ -335,7 +407,7 @@ const scriptData = {
           <span class="progress-label" id="monthPercent">{progress.monthProgress}%</span>
         </div>
         <div class="progress-item">
-          <span id="weekLabel">本周剩余 <strong id="weekRemain">{progress.weekRemainText}</strong></span>
+          <span id="weekLabel">距离下周一 <strong id="weekRemain">{progress.weekRemainText}</strong></span>
           <div class="progress-bar">
             <div class="progress-fill" id="weekProgressFill" style="width: {progress.weekProgress}%;"></div>
           </div>
@@ -358,7 +430,7 @@ const scriptData = {
       <p class="saying-text">“{saying?.text || '加载中...'}”</p>
     </div>
 
-    <!-- 5. 今日天气（占2列） -->
+    <!-- 5. 今日天气 -->
     <div class="dashboard-card glass-panel weather-card" style="grid-column: span 2;">
       <div class="card-header">
         <span class="card-icon">🌤️</span>
@@ -438,7 +510,7 @@ const scriptData = {
       )}
     </div>
 
-    <!-- 6. 热榜（占2列） -->
+    <!-- 6. 热榜 -->
     <div class="dashboard-card glass-panel" style="grid-column: span 2;">
       <div class="card-header">
         <span class="card-icon">🔥</span>
@@ -461,7 +533,7 @@ const scriptData = {
       )}
     </div>
 
-    <!-- 7. Links 区域（占满4列） -->
+    <!-- 7. Links -->
     <div class="dashboard-card glass-panel" style="grid-column: 1 / -1;">
       <div class="card-header">
         <span class="card-icon">🔗</span>
