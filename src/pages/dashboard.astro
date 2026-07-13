@@ -29,17 +29,41 @@ const indexMap: Record<string, string> = {
   pollen: '花粉',
 };
 
-// ===== 直接使用 Cloudflare 头信息获取地理位置 =====
-function fetchLocationByIP() {
-  const city = Astro.request.headers.get("cf-city") || "";
-  const region = Astro.request.headers.get("cf-region") || "";
-  if (city && city !== "" && city !== "未知") return city;
-  if (region && region !== "" && region !== "未知") return region;
-  return "北京";
+// ===== 🆕 通过 UAPI IPinfo 获取精确地理位置（精确到区县） =====
+async function fetchLocationByIP() {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch('https://uapis.cn/api/v1/network/ipinfo');
+    clearTimeout(timeoutId);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const { district, city, region } = data.data || {};
+    const location = district || city || region;
+    if (location && location !== '未知' && location !== '') {
+      return location;
+    }
+    // 降级：使用 Cloudflare 头信息
+    const cfCity = Astro.request.headers.get("cf-city") || "";
+    const cfRegion = Astro.request.headers.get("cf-region") || "";
+    return cfCity || cfRegion || "北京";
+  } catch {
+    const cfCity = Astro.request.headers.get("cf-city") || "";
+    const cfRegion = Astro.request.headers.get("cf-region") || "";
+    return cfCity || cfRegion || "北京";
+  }
 }
 
-// ===== 获取天气数据 =====
+// ===== 获取天气数据（每4小时缓存） =====
 async function fetchWeather(location: string) {
+  const cacheKey = `weather_${location}`;
+  try {
+    const cached = await env.SESSION?.get(cacheKey, 'json');
+    if (cached && cached.timestamp && (Date.now() - cached.timestamp < 4 * 3600 * 1000)) {
+      return cached.data;
+    }
+  } catch {}
+
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -52,14 +76,24 @@ async function fetchWeather(location: string) {
     );
     clearTimeout(timeoutId);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+    const data = await res.json();
+    await env.SESSION?.put(cacheKey, JSON.stringify({ data, timestamp: Date.now() }), { expirationTtl: 14400 });
+    return data;
   } catch {
     return null;
   }
 }
 
-// ===== 获取热榜 =====
+// ===== 获取热榜（每12小时缓存） =====
 async function fetchHotboard() {
+  const cacheKey = 'hotboard_cache';
+  try {
+    const cached = await env.SESSION?.get(cacheKey, 'json');
+    if (cached && cached.timestamp && (Date.now() - cached.timestamp < 12 * 3600 * 1000)) {
+      return cached.data;
+    }
+  } catch {}
+
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
@@ -69,7 +103,9 @@ async function fetchHotboard() {
     });
     clearTimeout(timeoutId);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+    const data = await res.json();
+    await env.SESSION?.put(cacheKey, JSON.stringify({ data, timestamp: Date.now() }), { expirationTtl: 43200 });
+    return data;
   } catch {
     return null;
   }
@@ -97,7 +133,7 @@ async function fetchHoliday() {
   }
 }
 
-// ===== 获取一言 =====
+// ===== 获取一言（每天00:00更新） =====
 async function fetchSaying(env: any) {
   try {
     const today = new Date().toISOString().slice(0, 10);
@@ -126,44 +162,61 @@ async function fetchSaying(env: any) {
   }
 }
 
-// ===== 计算日期进度 =====
+// ===== 计算日期进度（修正版） =====
 function getDateProgress() {
   const now = new Date();
+  // 年度
   const yearStart = new Date(now.getFullYear(), 0, 1);
   const yearEnd = new Date(now.getFullYear() + 1, 0, 1);
   const yearTotal = yearEnd.getTime() - yearStart.getTime();
   const yearElapsed = now.getTime() - yearStart.getTime();
   const yearProgress = (yearElapsed / yearTotal) * 100;
 
+  // 月度
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   const monthTotal = monthEnd.getTime() - monthStart.getTime();
   const monthElapsed = now.getTime() - monthStart.getTime();
   const monthProgress = (monthElapsed / monthTotal) * 100;
 
+  // 周度（以周一为第一天）
   const dayOfWeek = now.getDay() || 7;
   const weekStart = new Date(now);
   weekStart.setDate(now.getDate() - (dayOfWeek - 1));
   weekStart.setHours(0, 0, 0, 0);
   const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 6);
-  weekEnd.setHours(23, 59, 59, 999);
+  weekEnd.setDate(weekStart.getDate() + 7);
+  weekEnd.setHours(0, 0, 0, 0);
   const weekTotal = weekEnd.getTime() - weekStart.getTime();
   const weekElapsed = now.getTime() - weekStart.getTime();
   const weekProgress = (weekElapsed / weekTotal) * 100;
 
-  const daysInYear = Math.ceil((yearEnd.getTime() - yearStart.getTime()) / (1000 * 60 * 60 * 24));
-  const daysPassed = Math.floor((now.getTime() - yearStart.getTime()) / (1000 * 60 * 60 * 24));
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const weekRemainDays = Math.floor((weekEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  // 剩余时间（精确到秒）
+  const yearRemainMs = yearEnd.getTime() - now.getTime();
+  const monthRemainMs = monthEnd.getTime() - now.getTime();
+  const weekRemainMs = weekEnd.getTime() - now.getTime();
+
+  function formatRemain(ms: number): string {
+    if (ms <= 0) return '已结束';
+    const days = Math.floor(ms / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const mins = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+    const secs = Math.floor((ms % (1000 * 60)) / 1000);
+    let parts = [];
+    if (days > 0) parts.push(days + '天');
+    if (hours > 0) parts.push(hours + '时');
+    if (mins > 0) parts.push(mins + '分');
+    if (secs > 0) parts.push(secs + '秒');
+    return parts.join('') || '0秒';
+  }
 
   return {
     yearProgress: Math.round(yearProgress * 10) / 10,
     monthProgress: Math.round(monthProgress * 10) / 10,
     weekProgress: Math.round(weekProgress * 10) / 10,
-    yearRemain: daysInYear - daysPassed,
-    monthRemain: daysInMonth - now.getDate(),
-    weekRemain: weekRemainDays,
+    yearRemainText: formatRemain(yearRemainMs),
+    monthRemainText: formatRemain(monthRemainMs),
+    weekRemainText: formatRemain(weekRemainMs),
     yearStart: yearStart.getTime(),
     yearEnd: yearEnd.getTime(),
     monthStart: monthStart.getTime(),
@@ -188,10 +241,10 @@ function getWeatherEmoji(code: string): string {
 }
 
 // ===== 获取数据 =====
-const location = fetchLocationByIP();
+const location = await fetchLocationByIP();
 const db = getDb(env.DB);
 
-// 获取 Links 数据（保留链接管理功能）
+// 获取 Links 数据
 let links: any[] = [];
 try {
   links = await db
@@ -242,11 +295,11 @@ const scriptData = {
       </div>
     </div>
 
-    <!-- 2. 下一个传统节日 -->
+    <!-- 2. 距离最近的传统节日（改名） -->
     <div class="dashboard-card glass-panel">
       <div class="card-header">
         <span class="card-icon">🎉</span>
-        <span class="card-title">下一个传统节日</span>
+        <span class="card-title">距离最近的传统节日</span>
       </div>
       {nextHoliday ? (
         <div class="holiday-content">
@@ -260,7 +313,7 @@ const scriptData = {
       )}
     </div>
 
-    <!-- 3. 日历 & 进度 -->
+    <!-- 3. 日历 & 进度（修正显示格式） -->
     <div class="dashboard-card glass-panel">
       <div class="card-header">
         <span class="card-icon">📅</span>
@@ -268,21 +321,21 @@ const scriptData = {
       </div>
       <div class="calendar-content">
         <div class="progress-item">
-          <span id="yearLabel">本年剩余 <strong id="yearRemain">{progress.yearRemain}</strong> </span>
+          <span id="yearLabel">本年剩余 <strong id="yearRemain">{progress.yearRemainText}</strong></span>
           <div class="progress-bar">
             <div class="progress-fill" id="yearProgressFill" style="width: {progress.yearProgress}%;"></div>
           </div>
           <span class="progress-label" id="yearPercent">{progress.yearProgress}%</span>
         </div>
         <div class="progress-item">
-          <span id="monthLabel">本月剩余 <strong id="monthRemain">{progress.monthRemain}</strong> </span>
+          <span id="monthLabel">本月剩余 <strong id="monthRemain">{progress.monthRemainText}</strong></span>
           <div class="progress-bar">
             <div class="progress-fill" id="monthProgressFill" style="width: {progress.monthProgress}%;"></div>
           </div>
           <span class="progress-label" id="monthPercent">{progress.monthProgress}%</span>
         </div>
         <div class="progress-item">
-          <span id="weekLabel">本周剩余 <strong id="weekRemain">{progress.weekRemain}</strong> </span>
+          <span id="weekLabel">本周剩余 <strong id="weekRemain">{progress.weekRemainText}</strong></span>
           <div class="progress-bar">
             <div class="progress-fill" id="weekProgressFill" style="width: {progress.weekProgress}%;"></div>
           </div>

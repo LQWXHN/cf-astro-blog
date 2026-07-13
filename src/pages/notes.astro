@@ -25,7 +25,7 @@ import Base from "@/layouts/Base.astro";
 </Base>
 
 <style is:global>
-  /* ===== 便签墙专属样式 ===== */
+  /* ===== 便签墙专属样式（保持不变） ===== */
   body {
     overflow: hidden;
     background-image: linear-gradient(0deg, rgba(200,200,200,0.12) 1px, transparent 0),
@@ -778,6 +778,14 @@ function createCard(message, color, posLeft, posTop, rotation) {
 
   // ===== 初始化 =====
   fetchNotes();
+
+  // ===== 🆕 监听 Astro 页面加载事件，确保每次进入都加载便签 =====
+  document.addEventListener('astro:page-load', () => {
+    // 如果 board 为空（或卡片数量为0），重新获取
+    if (board.children.length === 0) {
+      fetchNotes();
+    }
+  });
 
   const noteInput = document.getElementById('note-input');
   const noteSubmit = document.getElementById('note-submit');
