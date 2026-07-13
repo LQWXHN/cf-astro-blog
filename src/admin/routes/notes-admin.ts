@@ -183,7 +183,7 @@ notesAdmin.get("/", async (c) => {
             cb.addEventListener('change', updateSelectedCount);
           });
 
-          // ===== 批量删除提交（修复：使用 fetch + FormData） =====
+          // ===== 批量删除提交（使用 JSON 格式，支持多选） =====
           batchConfirmDelete.addEventListener('click', function(e) {
             e.preventDefault();
 
@@ -198,16 +198,22 @@ notesAdmin.get("/", async (c) => {
               return;
             }
 
-            // 使用 FormData 提交
-            const formData = new FormData();
-            formData.append('_csrf', '${escapeAttribute(session.csrfToken)}');
+            // 收集选中的 ID
+            const ids = [];
             checked.forEach(cb => {
-              formData.append('ids', cb.value);
+              ids.push(parseInt(cb.value, 10));
             });
 
+            // 使用 JSON 格式提交
             fetch('/api/admin/notes-admin/batch-delete', {
               method: 'POST',
-              body: formData
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                ids: ids,
+                _csrf: '${escapeAttribute(session.csrfToken)}'
+              })
             }).then(res => {
               if (res.redirected) {
                 window.location.href = res.url;
@@ -261,30 +267,29 @@ notesAdmin.post("/add", async (c) => {
   }
 });
 
-// ===== 批量删除（后端兼容 FormData） =====
+// ===== 批量删除（接收 JSON，支持多选） =====
 notesAdmin.post("/batch-delete", async (c) => {
   try {
     const session = getAuthenticatedSession(c);
-    const body = await c.req.parseBody();
-    if (!assertCsrfToken(getBodyText(body, "_csrf"), session)) {
+    const body = await c.req.json();
+
+    if (body._csrf !== session.csrfToken) {
       return c.text("CSRF 校验失败", 403);
     }
 
-    // 获取 ids（可能是数组，也可能是单个值）
-    let ids = body["ids"] || [];
-    if (!Array.isArray(ids)) {
-      ids = [ids];
+    const ids = body.ids || [];
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return c.text("请选择要删除的便签", 400);
     }
-    const idList = ids.map(Number).filter(n => !isNaN(n) && n > 0);
 
+    const idList = ids.map(Number).filter(n => !isNaN(n) && n > 0);
     if (idList.length === 0) {
       return c.text("请选择要删除的便签", 400);
     }
 
     const db = getDb(c.env.DB);
-    for (const id of idList) {
-      await db.delete(notes).where(eq(notes.id, id));
-    }
+    // 使用 SQL IN 一次性删除所有
+    await db.delete(notes).where(sql`id IN (${idList.join(',')})`);
     return c.redirect("/api/admin/notes-admin");
   } catch (error: any) {
     console.error("批量删除错误:", error);
