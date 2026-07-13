@@ -65,7 +65,7 @@ function applySecurityHeaders(pathname: string, response: Response) {
 				"frame-ancestors 'none'",
 				"object-src 'none'",
 				"form-action 'self'",
-				"script-src 'self' https://static.cloudflareinsights.com",
+				"script-src 'self' https://static.cloudflareinsights.com 'unsafe-inline'",
 				"style-src 'self' 'unsafe-inline'",
 				"img-src 'self' data: https://lsky.nibutupaopao.top https://cn.bing.com",
 				"font-src 'self'",

@@ -676,72 +676,69 @@ import Base from "@/layouts/Base.astro";
     }
   }
 
-  // ===== 创建卡片（均匀分布） =====
-  function createCard(message, color, posLeft, posTop, rotation) {
-    const card = document.createElement('div');
-    card.className = 'card';
+  // ===== 创建卡片（随机位置） =====
+function createCard(message, color, posLeft, posTop, rotation) {
+  const card = document.createElement('div');
+  card.className = 'card';
 
-    const bgColor = color || '#fef3c7';
-    const angle = rotation ?? (Math.random() - 0.5) * 8;
-    const cardWidth = isMobile ? 170 : 220;
-    const cardHeight = isMobile ? 130 : 140;
+  const bgColor = color || '#fef3c7';
+  const angle = rotation ?? (Math.random() - 0.5) * 8;
+  const cardWidth = isMobile ? 170 : 220;
+  const cardHeight = isMobile ? 130 : 140;
+  const hm = isMobile ? 12 : 16;
+  const vm = isMobile ? 12 : 20;
 
-    // 均匀分布：根据已有卡片数量计算网格位置
-    const existingCards = board.querySelectorAll('.card').length;
-    const cols = Math.max(1, Math.floor((window.innerWidth - 20) / (cardWidth + 10)));
-    const rows = Math.max(1, Math.floor((window.innerHeight - 80) / (cardHeight + 10)));
-    const totalSlots = cols * rows;
-    const slotIndex = existingCards % Math.max(totalSlots, 1);
-    const col = slotIndex % cols;
-    const row = Math.floor(slotIndex / cols);
-    
-    // 在网格单元内添加随机偏移
-    const offsetX = (Math.random() - 0.5) * cardWidth * 0.25;
-    const offsetY = (Math.random() - 0.5) * cardHeight * 0.25;
-    const left = col * (cardWidth + 10) + 10 + offsetX;
-    const top = row * (cardHeight + 10) + 10 + offsetY;
-
-    // 边界保护
-    const finalLeft = Math.max(10, Math.min(window.innerWidth - cardWidth - 10, left));
-    const finalTop = Math.max(10, Math.min(window.innerHeight - cardHeight - 10, top));
-
-    card.style.background = bgColor;
-    card.style.left = finalLeft + 'px';
-    card.style.top = finalTop + 'px';
-    card.style.zIndex = ++zIndexCursor;
-
-    card.innerHTML = `
-      <div class="card-header">
-        <div class="window-controls">
-          <button class="control close" type="button" aria-label="关闭"></button>
-          <button class="control minimize" type="button" aria-label="最小化"></button>
-          <button class="control maximize" type="button" aria-label="最大化"></button>
-        </div>
-        <div class="card-title">便签</div>
-      </div>
-      <div class="card-body">${message}</div>
-    `;
-
-    const state = {
-      angle, scale: isMobile ? 0.85 : 0.7,
-      left: finalLeft, top: finalTop,
-      maximized: false,
-      closing: false,
-      lastPosition: { left: finalLeft, top: finalTop }
-    };
-
-    cardStates.set(card, state);
-    applyTransform(card, state);
-    board.appendChild(card);
-
-    requestAnimationFrame(() => {
-      state.scale = 1;
-      applyTransform(card, state);
-      card.style.opacity = '1';
-    });
-
-    setupCardInteractions(card);
+  // 随机位置（如果传入了位置则使用传入值）
+  let left, top;
+  if (posLeft !== undefined && posTop !== undefined) {
+    left = posLeft / 100 * (window.innerWidth - cardWidth);
+    top = posTop / 100 * (window.innerHeight - cardHeight);
+  } else {
+    left = hm + Math.random() * Math.max(window.innerWidth - cardWidth - hm * 2, 0);
+    top = vm + Math.random() * Math.max(window.innerHeight - cardHeight - vm * 2, 0);
   }
+
+  // 边界保护
+  const finalLeft = Math.max(10, Math.min(window.innerWidth - cardWidth - 10, left));
+  const finalTop = Math.max(10, Math.min(window.innerHeight - cardHeight - 10, top));
+
+  card.style.background = bgColor;
+  card.style.left = finalLeft + 'px';
+  card.style.top = finalTop + 'px';
+  card.style.zIndex = ++zIndexCursor;
+
+  card.innerHTML = `
+    <div class="card-header">
+      <div class="window-controls">
+        <button class="control close" type="button" aria-label="关闭"></button>
+        <button class="control minimize" type="button" aria-label="最小化"></button>
+        <button class="control maximize" type="button" aria-label="最大化"></button>
+      </div>
+      <div class="card-title">便签</div>
+    </div>
+    <div class="card-body">${message}</div>
+  `;
+
+  const state = {
+    angle, scale: isMobile ? 0.85 : 0.7,
+    left: finalLeft, top: finalTop,
+    maximized: false,
+    closing: false,
+    lastPosition: { left: finalLeft, top: finalTop }
+  };
+
+  cardStates.set(card, state);
+  applyTransform(card, state);
+  board.appendChild(card);
+
+  requestAnimationFrame(() => {
+    state.scale = 1;
+    applyTransform(card, state);
+    card.style.opacity = '1';
+  });
+
+  setupCardInteractions(card);
+}
 
   // ===== 提交便签（使用选中的颜色） =====
   async function sendNote() {
