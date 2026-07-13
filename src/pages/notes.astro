@@ -538,21 +538,36 @@ import Base from "@/layouts/Base.astro";
     document.addEventListener('pointerup', onUp);
   }
 
-  // ===== 从 API 加载便签 =====
-  async function fetchNotes() {
-    try {
-      const res = await fetch('/api/notes');
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        data.forEach(note => {
+  // ===== 从 API 加载便签（分批出现） =====
+async function fetchNotes() {
+  try {
+    const res = await fetch('/api/notes');
+    const data = await res.json();
+    if (Array.isArray(data) && data.length > 0) {
+      const batchSize = 4;        // 每批显示 4 张
+      let index = 0;
+      
+      const interval = setInterval(() => {
+        // 取当前批次的卡片
+        const batch = data.slice(index, index + batchSize);
+        if (batch.length === 0) {
+          clearInterval(interval);
+          return;
+        }
+        
+        // 批量创建
+        batch.forEach(note => {
           const color = COLOR_MAP[note.colorTheme] || '#f3f4f6';
           createCard(note.content, color, note.positionLeft, note.positionTop, note.rotation);
         });
-      }
-    } catch (e) {
-      console.error('加载便签失败:', e);
+        
+        index += batchSize;
+      }, 300); // 每批间隔 300ms
     }
+  } catch (e) {
+    console.error('加载便签失败:', e);
   }
+}
 
   // ===== 创建卡片 =====
   function createCard(message, color, posLeft, posTop, rotation) {
