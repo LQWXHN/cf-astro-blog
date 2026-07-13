@@ -20,10 +20,9 @@ notesAdmin.get("/", async (c) => {
   try {
     const session = getAuthenticatedSession(c);
     const db = getDb(c.env.DB);
-    
-    // 获取搜索关键词
+
     const keyword = c.req.query("keyword") || "";
-    
+
     // 统计数据
     const stats = await db
       .select({
@@ -36,7 +35,7 @@ notesAdmin.get("/", async (c) => {
 
     const stat = stats[0] || { total: 0, today: 0, approved: 0, pending: 0 };
 
-    // 按内容搜索（LIKE 模糊匹配）
+    // 查询便签
     let query = db.select().from(notes);
     if (keyword) {
       query = query.where(sql`content LIKE ${'%' + keyword + '%'}`);
@@ -78,7 +77,7 @@ notesAdmin.get("/", async (c) => {
         <div class="stat-card"><div class="stat-value">${stat.pending}</div><div class="stat-label">待审核</div></div>
       </div>
 
-      <!-- 操作栏 -->
+      <!-- 操作栏（只保留一个搜索框） -->
       <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem; align-items:center;">
         <!-- 搜索框 -->
         <form method="get" action="/api/admin/notes-admin" style="display:flex; gap:0.5rem; align-items:center;">
@@ -86,7 +85,7 @@ notesAdmin.get("/", async (c) => {
           <button type="submit" class="btn btn-sm">搜索</button>
           ${keyword ? `<a href="/api/admin/notes-admin" class="btn btn-sm">清除</a>` : ''}
         </form>
-        
+
         <!-- 添加便签 -->
         <form method="post" action="/api/admin/notes-admin/add" style="display:flex; gap:0.5rem; align-items:center;">
           <input type="hidden" name="_csrf" value="${escapeAttribute(session.csrfToken)}" />
@@ -101,7 +100,7 @@ notesAdmin.get("/", async (c) => {
           </select>
           <button type="submit" class="btn btn-primary">添加便签</button>
         </form>
-        
+
         <!-- 批量删除按钮 -->
         <button id="batchDeleteBtn" class="btn btn-danger">批量删除</button>
         <span id="batchStatus" style="font-size:0.85rem; color:var(--text-muted); display:none;">已选 <span id="selectedCount">0</span> 条</span>
@@ -144,10 +143,8 @@ notesAdmin.get("/", async (c) => {
           const batchSelectedCountSpan = document.getElementById('batchSelectedCount');
           const checkboxes = document.querySelectorAll('.note-checkbox');
           const selectAll = document.getElementById('selectAll');
-          let isBatchMode = false;
 
           function toggleBatchMode(show) {
-            isBatchMode = show;
             document.querySelectorAll('.batch-checkbox').forEach(el => {
               el.style.display = show ? '' : 'none';
             });
@@ -186,39 +183,54 @@ notesAdmin.get("/", async (c) => {
             cb.addEventListener('change', updateSelectedCount);
           });
 
-          // ===== 修复：批量删除提交 =====
-          batchConfirmDelete.addEventListener('click', function() {
+          // ===== 批量删除提交（修复版） =====
+          batchConfirmDelete.addEventListener('click', function(e) {
+            e.preventDefault();
+
+            // 重新获取当前选中的 checkbox（确保是最新状态）
             const checked = document.querySelectorAll('.note-checkbox:checked');
+
             if (checked.length === 0) {
               alert('请选择要删除的便签');
               return;
             }
-            if (confirm('确认删除选中的 ' + checked.length + ' 条便签吗？此操作不可撤销！')) {
-              const form = document.createElement('form');
-              form.method = 'POST';
-              form.action = '/api/admin/notes-admin/batch-delete';
-              
-              // CSRF token
-              const csrfInput = document.createElement('input');
-              csrfInput.type = 'hidden';
-              csrfInput.name = '_csrf';
-              csrfInput.value = '${escapeAttribute(session.csrfToken)}';
-              form.appendChild(csrfInput);
-              
-              // 选中的便签 ID
-              checked.forEach(cb => {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = 'ids';
-                input.value = cb.value;
-                form.appendChild(input);
-              });
-              
-              document.body.appendChild(form);
-              form.submit();
+
+            if (!confirm('确认删除选中的 ' + checked.length + ' 条便签吗？此操作不可撤销！')) {
+              return;
             }
+
+            // 收集选中的 ID
+            const ids = [];
+            checked.forEach(cb => {
+              ids.push(cb.value);
+            });
+
+            // 构建表单提交
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/api/admin/notes-admin/batch-delete';
+
+            // CSRF token
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = '_csrf';
+            csrfInput.value = '${escapeAttribute(session.csrfToken)}';
+            form.appendChild(csrfInput);
+
+            // 将 ids 作为数组提交
+            ids.forEach(id => {
+              const input = document.createElement('input');
+              input.type = 'hidden';
+              input.name = 'ids';
+              input.value = id;
+              form.appendChild(input);
+            });
+
+            document.body.appendChild(form);
+            form.submit();
           });
 
+          // 初始状态：隐藏批量模式
           toggleBatchMode(false);
         })();
       </script>
@@ -269,9 +281,18 @@ notesAdmin.post("/batch-delete", async (c) => {
     if (!assertCsrfToken(getBodyText(body, "_csrf"), session)) {
       return c.text("CSRF 校验失败", 403);
     }
-    const ids = body["ids"] || [];
-    const idList = Array.isArray(ids) ? ids.map(Number).filter(n => !isNaN(n)) : [];
-    if (idList.length === 0) return c.text("请选择要删除的便签", 400);
+
+    // 获取 ids（可能是数组，也可能是单个值）
+    let ids = body["ids"] || [];
+    if (!Array.isArray(ids)) {
+      ids = [ids];
+    }
+    const idList = ids.map(Number).filter(n => !isNaN(n) && n > 0);
+
+    if (idList.length === 0) {
+      return c.text("请选择要删除的便签", 400);
+    }
+
     const db = getDb(c.env.DB);
     for (const id of idList) {
       await db.delete(notes).where(eq(notes.id, id));
