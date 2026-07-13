@@ -21,11 +21,11 @@ notesAdmin.get("/", async (c) => {
     const session = getAuthenticatedSession(c);
     const db = getDb(c.env.DB);
     
-    // 统计数据
+    // 统计数据（修复：createdAt → created_at）
     const stats = await db
       .select({
         total: sql<number>`count(*)`.as("total"),
-        today: sql<number>`count(case when date(createdAt) = date('now') then 1 end)`.as("today"),
+        today: sql<number>`count(case when date(created_at) = date('now') then 1 end)`.as("today"),
         approved: sql<number>`count(case when status = 'approved' then 1 end)`.as("approved"),
         pending: sql<number>`count(case when status = 'pending' then 1 end)`.as("pending"),
       })
