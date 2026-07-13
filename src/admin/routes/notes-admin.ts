@@ -20,7 +20,10 @@ notesAdmin.get("/", async (c) => {
   try {
     const session = getAuthenticatedSession(c);
     const db = getDb(c.env.DB);
-
+    
+    // 获取搜索关键词
+    const keyword = c.req.query("keyword") || "";
+    
     // 统计数据
     const stats = await db
       .select({
@@ -33,14 +36,15 @@ notesAdmin.get("/", async (c) => {
 
     const stat = stats[0] || { total: 0, today: 0, approved: 0, pending: 0 };
 
-    // 按内容首字母升序（A-Z）
-    const allNotes = await db
-      .select()
-      .from(notes)
-      .orderBy(asc(notes.content));
+    // 按内容搜索（LIKE 模糊匹配）
+    let query = db.select().from(notes);
+    if (keyword) {
+      query = query.where(sql`content LIKE ${'%' + keyword + '%'}`);
+    }
+    const allNotes = await query.orderBy(asc(notes.content));
 
     const rowsHtml = allNotes.length === 0
-      ? `<tr><td colspan="6" class="empty-state">暂无便签</td></tr>`
+      ? `<tr><td colspan="6" class="empty-state">${keyword ? '未找到匹配的便签' : '暂无便签'}</td></tr>`
       : allNotes.map(note => `
           <tr data-id="${note.id}">
             <td class="batch-checkbox" style="display:none;">
@@ -76,6 +80,14 @@ notesAdmin.get("/", async (c) => {
 
       <!-- 操作栏 -->
       <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem; align-items:center;">
+        <!-- 搜索框 -->
+        <form method="get" action="/api/admin/notes-admin" style="display:flex; gap:0.5rem; align-items:center;">
+          <input type="text" name="keyword" placeholder="搜索便签内容..." value="${escapeAttribute(keyword)}" class="form-input" style="width:200px;" />
+          <button type="submit" class="btn btn-sm">搜索</button>
+          ${keyword ? `<a href="/api/admin/notes-admin" class="btn btn-sm">清除</a>` : ''}
+        </form>
+        
+        <!-- 添加便签 -->
         <form method="post" action="/api/admin/notes-admin/add" style="display:flex; gap:0.5rem; align-items:center;">
           <input type="hidden" name="_csrf" value="${escapeAttribute(session.csrfToken)}" />
           <input type="text" name="content" placeholder="输入便签内容..." maxlength="30" class="form-input" style="width:200px;" required />
@@ -89,6 +101,8 @@ notesAdmin.get("/", async (c) => {
           </select>
           <button type="submit" class="btn btn-primary">添加便签</button>
         </form>
+        
+        <!-- 批量删除按钮 -->
         <button id="batchDeleteBtn" class="btn btn-danger">批量删除</button>
         <span id="batchStatus" style="font-size:0.85rem; color:var(--text-muted); display:none;">已选 <span id="selectedCount">0</span> 条</span>
       </div>
@@ -172,6 +186,7 @@ notesAdmin.get("/", async (c) => {
             cb.addEventListener('change', updateSelectedCount);
           });
 
+          // ===== 修复：批量删除提交 =====
           batchConfirmDelete.addEventListener('click', function() {
             const checked = document.querySelectorAll('.note-checkbox:checked');
             if (checked.length === 0) {
@@ -182,11 +197,15 @@ notesAdmin.get("/", async (c) => {
               const form = document.createElement('form');
               form.method = 'POST';
               form.action = '/api/admin/notes-admin/batch-delete';
+              
+              // CSRF token
               const csrfInput = document.createElement('input');
               csrfInput.type = 'hidden';
               csrfInput.name = '_csrf';
               csrfInput.value = '${escapeAttribute(session.csrfToken)}';
               form.appendChild(csrfInput);
+              
+              // 选中的便签 ID
               checked.forEach(cb => {
                 const input = document.createElement('input');
                 input.type = 'hidden';
@@ -194,6 +213,7 @@ notesAdmin.get("/", async (c) => {
                 input.value = cb.value;
                 form.appendChild(input);
               });
+              
               document.body.appendChild(form);
               form.submit();
             }
