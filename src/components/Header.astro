@@ -18,13 +18,8 @@ function isInternalHref(href: string) {
 function isLinkActive(href: string) {
 	if (!isInternalHref(href)) return false;
 	
-	// 精确匹配
 	if (currentPath === href) return true;
-	
-	// 特殊处理 / 根路径
 	if (href === "/" && currentPath === "/") return true;
-	
-	// 处理动态路径（如 /blog/xxx, /notes 等）
 	if (href !== "/" && currentPath.startsWith(href)) return true;
 	
 	return false;
@@ -482,3 +477,17 @@ function isLinkActive(href: string) {
 		transition: none;
 	}
 </style>
+
+<script>
+  // ===== 客户端导航高亮修复 =====
+  document.addEventListener('astro:page-load', () => {
+    const currentPath = window.location.pathname;
+    document.querySelectorAll('.nav-link').forEach(link => {
+      const href = link.getAttribute('href');
+      if (!href) return;
+      // 判断是否激活
+      const isActive = href === currentPath || (href !== '/' && currentPath.startsWith(href));
+      link.classList.toggle('active', isActive);
+    });
+  });
+</script>

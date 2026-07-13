@@ -77,7 +77,7 @@ notesAdmin.get("/", async (c) => {
         <div class="stat-card"><div class="stat-value">${stat.pending}</div><div class="stat-label">待审核</div></div>
       </div>
 
-      <!-- 操作栏（只保留一个搜索框） -->
+      <!-- 操作栏 -->
       <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem; align-items:center;">
         <!-- 搜索框 -->
         <form method="get" action="/api/admin/notes-admin" style="display:flex; gap:0.5rem; align-items:center;">
@@ -183,11 +183,10 @@ notesAdmin.get("/", async (c) => {
             cb.addEventListener('change', updateSelectedCount);
           });
 
-          // ===== 批量删除提交（修复版） =====
+          // ===== 批量删除提交（修复：使用 fetch + FormData） =====
           batchConfirmDelete.addEventListener('click', function(e) {
             e.preventDefault();
 
-            // 重新获取当前选中的 checkbox（确保是最新状态）
             const checked = document.querySelectorAll('.note-checkbox:checked');
 
             if (checked.length === 0) {
@@ -199,38 +198,27 @@ notesAdmin.get("/", async (c) => {
               return;
             }
 
-            // 收集选中的 ID
-            const ids = [];
+            // 使用 FormData 提交
+            const formData = new FormData();
+            formData.append('_csrf', '${escapeAttribute(session.csrfToken)}');
             checked.forEach(cb => {
-              ids.push(cb.value);
+              formData.append('ids', cb.value);
             });
 
-            // 构建表单提交
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = '/api/admin/notes-admin/batch-delete';
-
-            // CSRF token
-            const csrfInput = document.createElement('input');
-            csrfInput.type = 'hidden';
-            csrfInput.name = '_csrf';
-            csrfInput.value = '${escapeAttribute(session.csrfToken)}';
-            form.appendChild(csrfInput);
-
-            // 将 ids 作为数组提交
-            ids.forEach(id => {
-              const input = document.createElement('input');
-              input.type = 'hidden';
-              input.name = 'ids';
-              input.value = id;
-              form.appendChild(input);
+            fetch('/api/admin/notes-admin/batch-delete', {
+              method: 'POST',
+              body: formData
+            }).then(res => {
+              if (res.redirected) {
+                window.location.href = res.url;
+              } else {
+                return res.text().then(text => alert('删除失败：' + text));
+              }
+            }).catch(err => {
+              alert('请求失败：' + err.message);
             });
-
-            document.body.appendChild(form);
-            form.submit();
           });
 
-          // 初始状态：隐藏批量模式
           toggleBatchMode(false);
         })();
       </script>
@@ -273,7 +261,7 @@ notesAdmin.post("/add", async (c) => {
   }
 });
 
-// ===== 批量删除 =====
+// ===== 批量删除（后端兼容 FormData） =====
 notesAdmin.post("/batch-delete", async (c) => {
   try {
     const session = getAuthenticatedSession(c);
