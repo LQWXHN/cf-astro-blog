@@ -18,6 +18,7 @@ interface Props {
 	description?: string;
 	image?: string;
 	canonicalUrl?: string;
+	fullscreen?: boolean;  // 🆕 全屏模式
 	backgroundOverride?: {
 		imageKey: string;
 		opacity: number;
@@ -41,7 +42,7 @@ function clampInteger(
 	return Math.min(max, Math.max(min, Math.round(value)));
 }
 
-const { title, description, image, canonicalUrl, backgroundOverride } =
+const { title, description, image, canonicalUrl, fullscreen, backgroundOverride } =
 	Astro.props;
 const isAdminPreview = Astro.url.searchParams.get("adminPreview") === "1";
 let siteAppearance = DEFAULT_SITE_APPEARANCE;
@@ -142,10 +143,10 @@ const resolvedDescription =
 		</div>
 		<Header siteAppearance={siteAppearance} />
 		<div class="site-route-frame">
-			<main class="container site-main">
+			<main class:list={["site-main", fullscreen ? "site-main-fullscreen" : "container"]}>
 				<slot />
 			</main>
-			<Footer />
+			{!fullscreen && <Footer />}
 		</div>
 	</body>
 </html>
