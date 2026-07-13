@@ -132,6 +132,9 @@ notesAdmin.get("/", async (c) => {
         </table>
       </div>
 
+      <!-- CSRF token 存在隐藏字段中，供 JS 读取 -->
+      <input type="hidden" id="csrfToken" value="${escapeAttribute(session.csrfToken)}" />
+
       <script>
         (function() {
           const batchDeleteBtn = document.getElementById('batchDeleteBtn');
@@ -143,6 +146,7 @@ notesAdmin.get("/", async (c) => {
           const batchSelectedCountSpan = document.getElementById('batchSelectedCount');
           const checkboxes = document.querySelectorAll('.note-checkbox');
           const selectAll = document.getElementById('selectAll');
+          const csrfToken = document.getElementById('csrfToken')?.value || '';
 
           function toggleBatchMode(show) {
             document.querySelectorAll('.batch-checkbox').forEach(el => {
@@ -183,7 +187,7 @@ notesAdmin.get("/", async (c) => {
             cb.addEventListener('change', updateSelectedCount);
           });
 
-          // ===== 批量删除提交（使用 JSON 格式，支持多选） =====
+          // ===== 批量删除提交（使用 JSON 格式，从隐藏字段读取 CSRF） =====
           batchConfirmDelete.addEventListener('click', function(e) {
             e.preventDefault();
 
@@ -212,7 +216,7 @@ notesAdmin.get("/", async (c) => {
               },
               body: JSON.stringify({
                 ids: ids,
-                _csrf: '${escapeAttribute(session.csrfToken)}'
+                _csrf: csrfToken
               })
             }).then(res => {
               if (res.redirected) {
@@ -267,7 +271,7 @@ notesAdmin.post("/add", async (c) => {
   }
 });
 
-// ===== 批量删除（接收 JSON，支持多选） =====
+// ===== 批量删除（接收 JSON） =====
 notesAdmin.post("/batch-delete", async (c) => {
   try {
     const session = getAuthenticatedSession(c);
