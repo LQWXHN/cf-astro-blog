@@ -2,8 +2,8 @@ import type { APIRoute } from "astro";
 import { getDb } from "@/lib/db";
 import { notes } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
+import { env } from "cloudflare:workers";
 
-// 颜色主题 → 十六进制颜色映射
 const colorMap: Record<string, string> = {
   yellow: "#fef3c7",
   blue: "#dbeafe",
@@ -15,44 +15,39 @@ const colorMap: Record<string, string> = {
   gray: "#e5e7eb",
 };
 
-// GET /api/notes - 获取所有已通过的便签
-export const GET: APIRoute = async ({ locals }) => {
-  const db = getDb(locals.runtime.env.DB);
+export const GET: APIRoute = async () => {
+  const db = getDb(env.DB);
   const result = await db
     .select()
     .from(notes)
     .where(eq(notes.status, "approved"))
     .orderBy(desc(notes.createdAt))
     .limit(150);
-  
-  // 把 colorTheme 映射为实际颜色值
+
   const mapped = result.map(note => ({
     ...note,
     color: colorMap[note.colorTheme] || "#f3f4f6"
   }));
-  
+
   return new Response(JSON.stringify(mapped), {
     headers: { "Content-Type": "application/json" },
   });
 };
 
-// POST /api/notes - 新增便签
-export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
+export const POST: APIRoute = async ({ request, clientAddress }) => {
   try {
     const body = await request.json();
     const content = body.content?.trim();
     
-    if (!content || content.length === 0) {
+    if (!content) {
       return new Response(JSON.stringify({ error: "内容不能为空" }), { status: 400 });
     }
     if (content.length > 30) {
       return new Response(JSON.stringify({ error: "内容不能超过30个字" }), { status: 400 });
     }
     
-    // 简单防 XSS
     const sanitized = content.replace(/<[^>]*>/g, "");
-    
-    const db = getDb(locals.runtime.env.DB);
+    const db = getDb(env.DB);
     const themes = ["yellow", "blue", "green", "pink", "purple", "orange"];
     
     await db.insert(notes).values({
@@ -69,6 +64,7 @@ export const POST: APIRoute = async ({ request, locals, clientAddress }) => {
       headers: { "Content-Type": "application/json" },
     });
   } catch (error) {
+    console.error(error);
     return new Response(JSON.stringify({ error: "服务器错误" }), { status: 500 });
   }
 };
