@@ -56,7 +56,6 @@ function getNextHoliday() {
     
     if (holidayDate.getTime() >= today.getTime()) {
       const diffMs = holidayDate.getTime() - today.getTime();
-      // 使用 Math.floor 确保天数准确
       const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
       if (diffDays < closestDays) {
         closestDays = diffDays;
@@ -83,38 +82,26 @@ function getNextHoliday() {
   return closest;
 }
 
-// ===== 🆕 获取访客公网 IP =====
-async function getVisitorIP(): Promise<string | null> {
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch('https://api.ipify.org?format=json', {
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    console.log('🌐 获取到访客IP:', data.ip);
-    return data.ip;
-  } catch (error) {
-    console.error('api.ipify.org 获取IP失败:', error);
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      const res2 = await fetch('https://httpbin.org/ip', {
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-      if (!res2.ok) throw new Error(`HTTP ${res2.status}`);
-      const data2 = await res2.json();
-      const ip = data2.origin.split(',')[0].trim();
-      console.log('🌐 获取到访客IP (备用):', ip);
-      return ip;
-    } catch (error2) {
-      console.error('httpbin.org 获取IP失败:', error2);
-      return null;
-    }
+// ===== 🆕 获取访客真实 IP（优先从 Cloudflare 头信息获取） =====
+function getVisitorIPFromHeaders(request: Request): string | null {
+  // 优先使用 cf-connecting-ip（Cloudflare 真实访客 IP）
+  const cfIP = request.headers.get("cf-connecting-ip");
+  if (cfIP && cfIP !== "") {
+    console.log('🌐 从 cf-connecting-ip 获取到访客IP:', cfIP);
+    return cfIP;
   }
+  
+  // 备用：x-forwarded-for
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded && forwarded !== "") {
+    const ips = forwarded.split(',').map(s => s.trim());
+    const firstIP = ips[0];
+    console.log('🌐 从 x-forwarded-for 获取到访客IP:', firstIP);
+    return firstIP;
+  }
+  
+  console.log('🌐 无法获取访客真实IP');
+  return null;
 }
 
 // ===== 🆕 通过 IP 查询地理位置（用于问候卡片，精确到区县） =====
@@ -137,29 +124,33 @@ async function fetchGreetingLocation(ip: string | null) {
     console.log('👋 UAPI IPinfo (问候) 响应:', JSON.stringify(data));
     
     if (data) {
+      // 直接使用 region 字段的原始值，不拆词拼接
+      // 格式：国家 省份 城市，如 "中国 江西省 赣州市"
       const region = data.region || '';
-      const parts = region.split(' ').filter(Boolean);
-      let location = '';
-      // 格式：国家 省份 城市，取省份+城市
-      if (parts.length >= 3) {
-        location = (parts[1] || '') + (parts[2] || '');
-      } else if (data.city) {
-        location = data.city;
-      } else if (region) {
-        location = region;
+      if (region && region !== '未知' && region !== '') {
+        // 去除开头的国家部分，取 "省份 + 城市"
+        const parts = region.split(' ').filter(Boolean);
+        if (parts.length >= 3) {
+          // parts[0]=国家, parts[1]=省份, parts[2]=城市
+          let location = parts[1] + (parts[2] || '');
+          // 如果有区县信息，追加
+          const district = data.district || '';
+          const area = data.area || '';
+          const county = data.county || '';
+          const fineLocation = district || area || county;
+          if (fineLocation && fineLocation !== '未知' && fineLocation !== '') {
+            location = location + fineLocation;
+          }
+          if (location && location !== '未知' && location !== '') {
+            return location;
+          }
+        }
+        return region;
       }
       
-      // 尝试获取区县
-      const district = data.district || '';
-      const area = data.area || '';
-      const county = data.county || '';
-      const fineLocation = district || area || county;
-      if (fineLocation && fineLocation !== '未知' && fineLocation !== '') {
-        location = location + fineLocation;
-      }
-      
-      if (location && location !== '未知' && location !== '' && location !== 'None') {
-        return location;
+      // 备选：使用 city 字段
+      if (data.city && data.city !== '未知') {
+        return data.city;
       }
     }
     return '远方';
@@ -334,11 +325,20 @@ async function fetchSaying(env: any) {
   }
 }
 
-// ===== 🆕 计算日期进度（修正版，使用用户给定公式） =====
-function getDateProgress() {
+// ===== 🆕 获取北京时间对象（强制 UTC+8） =====
+function getBeijingTime() {
   const now = new Date();
+  // 获取 UTC 时间戳，加上 8 小时得到北京时间
+  const beijingTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  return beijingTime;
+}
+
+// ===== 🆕 计算日期进度（使用北京时间，修正公式） =====
+function getDateProgress() {
+  // 使用北京时间
+  const now = getBeijingTime();
   
-  // 年度
+  // 年度（使用北京时间计算）
   const yearStart = new Date(now.getFullYear(), 0, 1);
   const yearEnd = new Date(now.getFullYear() + 1, 0, 1);
   const yearTotal = yearEnd.getTime() - yearStart.getTime();
@@ -352,10 +352,10 @@ function getDateProgress() {
   const monthElapsed = now.getTime() - monthStart.getTime();
   const monthProgress = (monthElapsed / monthTotal) * 100;
   
-  // 🆕 周度：使用用户给定公式计算到本周日 24:00 的剩余时间
-  // w：周一=1，周日=7
+  // 周度：使用用户给定公式计算到本周日 24:00 的剩余时间
+  // w：周一=1，周日=7（北京时间）
   const w = now.getDay() || 7;
-  // daySec：今天已过秒数
+  // daySec：今天已过秒数（北京时间）
   const daySec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
   // 到本周日 24:00 的总剩余秒数
   const totalSec = (7 - w) * 86400 + (86400 - daySec);
@@ -396,6 +396,8 @@ function getDateProgress() {
     yearRemainText: formatRemain(yearRemainMs),
     monthRemainText: formatRemain(monthRemainMs),
     weekRemainText: `${remainDays}天${remainHours}时${remainMins}分${remainSecs}秒`,
+    // 用于客户端实时更新
+    weekRemainData: { days: remainDays, hours: remainHours, mins: remainMins, secs: remainSecs },
     yearStart: yearStart.getTime(),
     yearEnd: yearEnd.getTime(),
     monthStart: monthStart.getTime(),
@@ -418,8 +420,9 @@ function getWeatherEmoji(code: string): string {
 }
 
 // ===== 获取数据 =====
-const visitorIP = await getVisitorIP();
-console.log('🌐 访客IP:', visitorIP);
+// 从请求头获取真实 IP
+const visitorIP = getVisitorIPFromHeaders(Astro.request);
+console.log('🌐 访客真实IP:', visitorIP);
 
 const location = await fetchLocationByIP(visitorIP);
 console.log('📍 最终天气定位结果:', location);
@@ -461,6 +464,11 @@ const scriptData = {
   monthStart: progress.monthStart,
   monthEnd: progress.monthEnd,
   holidayTarget: holidayTarget,
+  // 传递周剩余数据供客户端更新
+  weekDays: progress.weekRemainData.days,
+  weekHours: progress.weekRemainData.hours,
+  weekMins: progress.weekRemainData.mins,
+  weekSecs: progress.weekRemainData.secs,
 };
 ---
 
@@ -835,6 +843,7 @@ const scriptData = {
     yearStart, yearEnd,
     monthStart, monthEnd,
     holidayTarget,
+    weekDays, weekHours, weekMins, weekSecs,
   } = scriptData;
 
   function updateClock() {
@@ -889,11 +898,30 @@ const scriptData = {
     }
   }
 
+  // ===== 🆕 更新本周剩余（使用服务端传递的初始值，然后每秒递减） =====
+  function updateWeekRemain(initialDays, initialHours, initialMins, initialSecs) {
+    // 计算初始总秒数
+    let totalSecs = initialDays * 86400 + initialHours * 3600 + initialMins * 60 + initialSecs;
+    
+    // 每秒更新一次
+    setInterval(() => {
+      if (totalSecs <= 0) {
+        document.getElementById('weekRemain').textContent = '0天0时0分0秒';
+        return;
+      }
+      totalSecs -= 1;
+      const days = Math.floor(totalSecs / 86400);
+      const hours = Math.floor((totalSecs % 86400) / 3600);
+      const mins = Math.floor((totalSecs % 3600) / 60);
+      const secs = Math.floor(totalSecs % 60);
+      document.getElementById('weekRemain').textContent = days + '天' + hours + '时' + mins + '分' + secs + '秒';
+    }, 1000);
+  }
+
   function updateCountdown(updateProgress) {
     const now = Date.now();
     updateItem('yearRemain', 'yearProgressFill', 'yearPercent', yearStart, yearEnd, now, updateProgress);
     updateItem('monthRemain', 'monthProgressFill', 'monthPercent', monthStart, monthEnd, now, updateProgress);
-    // 周剩余进度已由服务端计算并渲染，客户端无需更新
     if (holidayTarget !== null) {
       const diff = holidayTarget - now;
       if (diff > 0) {
@@ -905,8 +933,14 @@ const scriptData = {
     }
   }
 
+  // 启动时钟
   updateClock();
   setInterval(updateClock, 1000);
+  
+  // 启动周剩余倒计时
+  updateWeekRemain(weekDays, weekHours, weekMins, weekSecs);
+  
+  // 启动年/月/节日倒计时（每分钟更新一次即可）
   updateCountdown(true);
   let lastHour = new Date().getHours();
   setInterval(() => {
@@ -917,5 +951,5 @@ const scriptData = {
       lastHour = currentHour;
     }
     updateCountdown(shouldUpdateProgress);
-  }, 1000);
+  }, 60000); // 每分钟检查一次
 </script>
