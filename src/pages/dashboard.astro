@@ -248,7 +248,7 @@ async function fetchHotboard() {
 // ===== 获取节日 =====
 async function fetchHoliday() {
   const next = getNextHoliday();
-  console.log('🎉 下一个节日:', next);
+  console.log(' 下一个节日:', next);
   return { nearby: next ? [next] : [] };
 }
 
@@ -351,7 +351,7 @@ const [hotboard, holiday, saying] = await Promise.all([
 const nextHoliday = holiday?.nearby?.[0] || null;
 const holidayTarget = nextHoliday ? new Date(nextHoliday.date).getTime() : null;
 
-console.log('🎉 下一个节日:', nextHoliday);
+console.log(' 下一个节日:', nextHoliday);
 
 const scriptData = {
   holidayTarget: holidayTarget,
@@ -378,7 +378,7 @@ const scriptData = {
     <div class="dashboard-card glass-panel">
       <div class="card-header">
         <span class="card-icon">👋</span>
-        <span class="card-title">欢迎来到小站</span>
+        <span class="card-title">此间小站，静候相逢</span>
       </div>
       <p class="greeting-text">你好，来自 <strong>{greeting}</strong> 的朋友！</p>
     </div>
@@ -576,7 +576,7 @@ const scriptData = {
                 <span class="link-card-new-tag" style="background:{link.tagColor || '#0a84ff'}; color:#fff;">
                   {link.tag || '链接'}
                 </span>
-                <span class="link-card-new-arrow">→</span>
+                <span class="link-card-new-arrow"> </span>
               </div>
             </a>
           ))}

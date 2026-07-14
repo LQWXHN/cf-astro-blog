@@ -27,7 +27,7 @@ linksRoutes.get("/", async (c) => {
 
     const rowsHtml =
       links.length === 0
-        ? `<tr><td colspan="5" class="empty-state">暂无链接</td></tr>`
+        ? `<tr><td colspan="6" class="empty-state">暂无链接</td></tr>`
         : links
             .map(
               (link) => `
@@ -43,6 +43,11 @@ linksRoutes.get("/", async (c) => {
                   </td>
                   <td><strong>${escapeHtml(link.title)}</strong></td>
                   <td><a href="${escapeAttribute(link.url)}" target="_blank" style="color:var(--color-accent);">${escapeHtml(link.url)}</a></td>
+                  <td>
+                    <span style="background:${escapeAttribute(link.tagColor || '#0a84ff')}; color:#fff; padding:0.1rem 0.6rem; border-radius:999px; font-size:0.65rem; font-weight:500; display:inline-block;">
+                      ${escapeHtml(link.tag || '链接')}
+                    </span>
+                  </td>
                   <td>${link.sortOrder}</td>
                   <td>
                     <a href="/api/admin/dashboard-links/${link.id}/edit" class="btn btn-sm">编辑</a>
@@ -68,6 +73,7 @@ linksRoutes.get("/", async (c) => {
               <th style="width:60px;">图标</th>
               <th>名称</th>
               <th>地址</th>
+              <th style="width:120px;">标签</th>
               <th style="width:80px;">排序</th>
               <th style="width:160px;">操作</th>
             </tr>
@@ -95,16 +101,29 @@ linksRoutes.get("/new", async (c) => {
         <input type="hidden" name="_csrf" value="${escapeAttribute(session.csrfToken)}" />
         <div class="form-group">
           <label for="title">卡片名称 *</label>
-          <input type="text" id="title" name="title" class="form-input" required placeholder="例如：北京时间" />
+          <input type="text" id="title" name="title" class="form-input" required placeholder="例如：Bing Wallpapers" />
         </div>
         <div class="form-group">
           <label for="url">跳转地址 *</label>
-          <input type="text" id="url" name="url" class="form-input" required placeholder="/dashboard 或 https://example.com" />
+          <input type="text" id="url" name="url" class="form-input" required placeholder="https://example.com" />
         </div>
         <div class="form-group">
           <label for="icon">图标</label>
-          <input type="text" id="icon" name="icon" class="form-input" placeholder="emoji（如 🔗）或图片URL 或 Iconify图标名（如 mdi:home）" />
-          <p class="form-help">支持三种格式：1️⃣ emoji（如 🔗） 2️⃣ 图片URL 3️⃣ Iconify图标名（如 mdi:home，需加载对应图标库）</p>
+          <input type="text" id="icon" name="icon" class="form-input" placeholder="emoji（如 🔗）或图片URL" />
+          <p class="form-help">支持 emoji 或图片URL</p>
+        </div>
+        <div class="form-group">
+          <label for="tag">标签文字</label>
+          <input type="text" id="tag" name="tag" class="form-input" placeholder="例如：壁纸" value="链接" />
+          <p class="form-help">卡片底部左侧显示的标签文字</p>
+        </div>
+        <div class="form-group">
+          <label for="tagColor">标签颜色</label>
+          <div style="display:flex; gap:0.5rem; align-items:center;">
+            <input type="color" id="tagColor" name="tagColor" class="form-input" style="width:60px; padding:0.2rem; height:40px;" value="#0a84ff" />
+            <span style="color:var(--text-muted); font-size:0.85rem;">点击选择颜色</span>
+          </div>
+          <p class="form-help">标签的背景色，十六进制颜色值</p>
         </div>
         <div class="form-group">
           <label for="sortOrder">排序权重（数字越小越靠前）</label>
@@ -132,12 +151,14 @@ linksRoutes.post("/", async (c) => {
     const title = getBodyText(body, "title").trim();
     const url = getBodyText(body, "url").trim();
     const icon = getBodyText(body, "icon").trim() || null;
+    const tag = getBodyText(body, "tag").trim() || "链接";
+    const tagColor = getBodyText(body, "tagColor").trim() || "#0a84ff";
     const sortOrder = Number.parseInt(getBodyText(body, "sortOrder")) || 0;
     if (!title || !url) {
       return c.text("名称和地址为必填项", 400);
     }
     const db = getDb(c.env.DB);
-    await db.insert(dashboardLinks).values({ title, url, icon, sortOrder });
+    await db.insert(dashboardLinks).values({ title, url, icon, tag, tagColor, sortOrder });
     return c.redirect("/api/admin/dashboard-links");
   } catch (error: any) {
     return c.text(`错误: ${error.message}`, 500);
@@ -175,6 +196,19 @@ linksRoutes.get("/:id/edit", async (c) => {
           <p class="form-help">当前图标：${link.icon || '无'}</p>
         </div>
         <div class="form-group">
+          <label for="tag">标签文字</label>
+          <input type="text" id="tag" name="tag" class="form-input" value="${escapeAttribute(link.tag || '链接')}" />
+          <p class="form-help">卡片底部左侧显示的标签文字</p>
+        </div>
+        <div class="form-group">
+          <label for="tagColor">标签颜色</label>
+          <div style="display:flex; gap:0.5rem; align-items:center;">
+            <input type="color" id="tagColor" name="tagColor" class="form-input" style="width:60px; padding:0.2rem; height:40px;" value="${escapeAttribute(link.tagColor || '#0a84ff')}" />
+            <span style="color:var(--text-muted); font-size:0.85rem;">当前标签预览：<span style="background:${escapeAttribute(link.tagColor || '#0a84ff')}; padding:0.1rem 0.6rem; border-radius:999px; color:#fff; font-size:0.7rem;">${escapeAttribute(link.tag || '链接')}</span></span>
+          </div>
+          <p class="form-help">标签的背景色，十六进制颜色值</p>
+        </div>
+        <div class="form-group">
           <label for="sortOrder">排序权重</label>
           <input type="number" id="sortOrder" name="sortOrder" class="form-input" value="${link.sortOrder}" />
         </div>
@@ -201,6 +235,8 @@ linksRoutes.post("/:id", async (c) => {
     const title = getBodyText(body, "title").trim();
     const url = getBodyText(body, "url").trim();
     const icon = getBodyText(body, "icon").trim() || null;
+    const tag = getBodyText(body, "tag").trim() || "链接";
+    const tagColor = getBodyText(body, "tagColor").trim() || "#0a84ff";
     const sortOrder = Number.parseInt(getBodyText(body, "sortOrder")) || 0;
     if (!title || !url) {
       return c.text("名称和地址为必填项", 400);
@@ -208,7 +244,7 @@ linksRoutes.post("/:id", async (c) => {
     const db = getDb(c.env.DB);
     await db
       .update(dashboardLinks)
-      .set({ title, url, icon, sortOrder, updatedAt: new Date().toISOString() })
+      .set({ title, url, icon, tag, tagColor, sortOrder, updatedAt: new Date().toISOString() })
       .where(eq(dashboardLinks.id, id));
     return c.redirect("/api/admin/dashboard-links");
   } catch (error: any) {
