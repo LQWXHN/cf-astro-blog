@@ -318,7 +318,7 @@ function getWeatherEmoji(code: string): string {
   return map[code] || '🌤️';
 }
 
-// ===== 🆕 十六进制转HSL色相 =====
+// ===== 十六进制转HSL色相 =====
 function hexToHue(hex: string): number {
   const cleaned = hex.replace('#', '');
   const r = parseInt(cleaned.substring(0, 2), 16) / 255;
@@ -344,13 +344,13 @@ function hexToHue(hex: string): number {
   return Math.round(h);
 }
 
-// ===== 🆕 生成标签样式 =====
+// ===== 🆕 生成标签样式（提高透明度，让颜色更明显） =====
 function generateTagStyle(hexColor: string): { bg: string; text: string } {
   const hue = hexToHue(hexColor || '#0a84ff');
-  // 背景：低饱和度、高亮度、半透明（14%透明度）
-  const bg = `hsla(${hue}, 60%, 92%, 0.14)`;
-  // 文字：同色相，加深（饱和度+25%，亮度-48%）
-  const text = `hsl(${hue}, 85%, 44%)`;
+  // 背景：提高透明度到 28%，让颜色更明显
+  const bg = `hsla(${hue}, 70%, 85%, 0.28)`;
+  // 文字：降低亮度到 32%，让文字更深更清晰
+  const text = `hsl(${hue}, 80%, 32%)`;
   return { bg, text };
 }
 
@@ -374,7 +374,7 @@ try {
     .from(dashboardLinks)
     .orderBy(dashboardLinks.sortOrder);
   
-  // 🔧 将数据库列名 tag_color 映射为 tagColor
+  // 将数据库列名 tag_color 映射为 tagColor
   links = rawLinks.map(link => ({
     ...link,
     tagColor: (link as any).tag_color || link.tagColor || '#0a84ff',
@@ -385,7 +385,7 @@ try {
   links = [];
 }
 
-// ===== 🆕 为每个链接生成标签样式 =====
+// ===== 为每个链接生成标签样式 =====
 const linksWithTagStyle = links.map(link => ({
   ...link,
   tagStyle: generateTagStyle(link.tagColor || '#0a84ff')
@@ -584,7 +584,7 @@ const scriptData = {
       )}
     </div>
 
-    <!-- 7. 链接卡片（🆕 标签自动配色） -->
+    <!-- 7. 链接卡片 -->
     <div class="dashboard-card glass-panel" style="grid-column: 1 / -1;">
       <div class="card-header">
         <span class="card-icon">🔗</span>
