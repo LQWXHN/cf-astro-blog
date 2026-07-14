@@ -49,12 +49,12 @@ function getNextHoliday() {
   let closest = null;
   let closestDays = Infinity;
   
-  // 先尝试当年
   for (const holiday of HOLIDAYS) {
     const parts = holiday.date.split('-').map(Number);
     const holidayDate = new Date(parts[0], parts[1] - 1, parts[2]);
     holidayDate.setHours(0, 0, 0, 0);
     
+    // 如果节日在今天或之后
     if (holidayDate.getTime() >= today.getTime()) {
       const diffMs = holidayDate.getTime() - today.getTime();
       const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
@@ -84,22 +84,89 @@ function getNextHoliday() {
   return closest;
 }
 
-// ===== 通过 UAPI IPinfo 获取精确地理位置 =====
+// ===== 🆕 获取问候位置（精确到区县，用于"你好，来自...的朋友"） =====
+async function fetchGreetingLocation() {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(
+      'https://uapis.cn/api/v1/network/ipinfo?source=commercial',
+      {
+        headers: { Authorization: `Bearer ${UAPI_KEY}` },
+        signal: controller.signal,
+      }
+    );
+    clearTimeout(timeoutId);
+    if (!res.ok) throw new Error(`UAPI HTTP ${res.status}`);
+    const data = await res.json();
+    console.log('👋 UAPI IPinfo (问候) 响应:', JSON.stringify(data));
+    
+    if (data) {
+      // 优先使用 region 字段（格式：国家 省份 城市）
+      const region = data.region || '';
+      const parts = region.split(' ').filter(Boolean);
+      let location = '';
+      if (parts.length >= 3) {
+        // 取省份 + 城市
+        location = (parts[1] || '') + (parts[2] || '');
+      } else if (data.city) {
+        location = data.city;
+      } else if (region) {
+        location = region;
+      }
+      
+      // 尝试从其他字段获取更精确的位置
+      const district = data.district || '';
+      const area = data.area || '';
+      const county = data.county || '';
+      const fineLocation = district || area || county;
+      if (fineLocation && fineLocation !== '未知' && fineLocation !== '') {
+        location = location + fineLocation;
+      }
+      
+      if (location && location !== '未知' && location !== '' && location !== 'None') {
+        return location;
+      }
+    }
+    return '远方';
+  } catch (error) {
+    console.error('问候位置查询失败:', error);
+    return '远方';
+  }
+}
+
+// ===== 通过 UAPI IPinfo 获取地理位置（用于天气，精确到城市） =====
 async function fetchLocationByIP() {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch('https://uapis.cn/api/v1/network/ipinfo', {
-      signal: controller.signal,
-    });
+    const res = await fetch(
+      'https://uapis.cn/api/v1/network/ipinfo?source=commercial',
+      {
+        headers: { Authorization: `Bearer ${UAPI_KEY}` },
+        signal: controller.signal,
+      }
+    );
     clearTimeout(timeoutId);
     if (!res.ok) throw new Error(`UAPI HTTP ${res.status}`);
     const data = await res.json();
-    console.log('📍 UAPI IPinfo 响应:', JSON.stringify(data));
+    console.log('📍 UAPI IPinfo (天气) 响应:', JSON.stringify(data));
     
-    if (data && data.code === 200 && data.data) {
-      const { district, city, region } = data.data;
-      const location = district || city || region;
+    if (data) {
+      // 解析 region 字段（格式：国家 省份 城市）
+      const region = data.region || '';
+      const parts = region.split(' ').filter(Boolean);
+      let location = '';
+      if (parts.length >= 3) {
+        // 取城市（第3部分）
+        location = parts[2] || '';
+      }
+      if (!location && data.city) {
+        location = data.city;
+      }
+      if (!location && region) {
+        location = region;
+      }
       if (location && location !== '未知' && location !== '' && location !== 'None') {
         return location;
       }
@@ -191,9 +258,8 @@ async function fetchHotboard() {
   }
 }
 
-// ===== 🆕 获取节日（硬编码，不再调用 API） =====
+// ===== 获取节日（硬编码） =====
 async function fetchHoliday() {
-  // 直接计算下一个节日
   const next = getNextHoliday();
   console.log('🎉 下一个节日:', next);
   return { nearby: next ? [next] : [] };
@@ -228,43 +294,44 @@ async function fetchSaying(env: any) {
   }
 }
 
-// ===== 计算日期进度 =====
+// ===== 🆕 计算日期进度（修正版，使用用户给定公式） =====
 function getDateProgress() {
   const now = new Date();
+  
   // 年度
   const yearStart = new Date(now.getFullYear(), 0, 1);
   const yearEnd = new Date(now.getFullYear() + 1, 0, 1);
   const yearTotal = yearEnd.getTime() - yearStart.getTime();
   const yearElapsed = now.getTime() - yearStart.getTime();
   const yearProgress = (yearElapsed / yearTotal) * 100;
-
+  
   // 月度
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   const monthTotal = monthEnd.getTime() - monthStart.getTime();
   const monthElapsed = now.getTime() - monthStart.getTime();
   const monthProgress = (monthElapsed / monthTotal) * 100;
-
-  // 周度：距离下周一
-  const dayOfWeek = now.getDay() || 7;
-  const nextMonday = new Date(now);
-  const daysUntilMonday = dayOfWeek === 1 ? 7 : 8 - dayOfWeek;
-  nextMonday.setDate(now.getDate() + daysUntilMonday);
-  nextMonday.setHours(0, 0, 0, 0);
   
-  const weekStart = new Date(now);
-  weekStart.setDate(now.getDate() - (dayOfWeek - 1));
-  weekStart.setHours(0, 0, 0, 0);
+  // 🆕 周度：使用用户给定公式计算到本周日 24:00 的剩余时间
+  const w = now.getDay() || 7; // 周一=1, 周日=7
+  const daySec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+  const totalSec = (7 - w) * 86400 + (86400 - daySec);
   
-  const weekTotal = nextMonday.getTime() - weekStart.getTime();
-  const weekElapsed = now.getTime() - weekStart.getTime();
+  // 分解为天/时/分/秒
+  const remainDays = Math.floor(totalSec / 86400);
+  const remainHours = Math.floor((totalSec % 86400) / 3600);
+  const remainMins = Math.floor((totalSec % 3600) / 60);
+  const remainSecs = Math.floor(totalSec % 60);
+  
+  // 本周已过时间（从周一开始）
+  const weekElapsed = (w - 1) * 86400 + daySec;
+  const weekTotal = 7 * 86400;
   const weekProgress = (weekElapsed / weekTotal) * 100;
-
-  // 剩余时间（精确到秒）
+  
+  // 年度和月度剩余时间（精确到秒）
   const yearRemainMs = yearEnd.getTime() - now.getTime();
   const monthRemainMs = monthEnd.getTime() - now.getTime();
-  const weekRemainMs = nextMonday.getTime() - now.getTime();
-
+  
   function formatRemain(ms: number): string {
     if (ms <= 0) return '已结束';
     const days = Math.floor(ms / (1000 * 60 * 60 * 24));
@@ -278,20 +345,18 @@ function getDateProgress() {
     if (secs > 0) parts.push(secs + '秒');
     return parts.join('') || '0秒';
   }
-
+  
   return {
     yearProgress: Math.round(yearProgress * 10) / 10,
     monthProgress: Math.round(monthProgress * 10) / 10,
     weekProgress: Math.round(weekProgress * 10) / 10,
     yearRemainText: formatRemain(yearRemainMs),
     monthRemainText: formatRemain(monthRemainMs),
-    weekRemainText: formatRemain(weekRemainMs),
+    weekRemainText: `${remainDays}天${remainHours}时${remainMins}分${remainSecs}秒`,
     yearStart: yearStart.getTime(),
     yearEnd: yearEnd.getTime(),
     monthStart: monthStart.getTime(),
     monthEnd: monthEnd.getTime(),
-    weekStart: weekStart.getTime(),
-    weekEnd: nextMonday.getTime(),
   };
 }
 
@@ -311,7 +376,10 @@ function getWeatherEmoji(code: string): string {
 
 // ===== 获取数据 =====
 const location = await fetchLocationByIP();
-console.log('📍 最终定位结果:', location);
+console.log('📍 最终天气定位结果:', location);
+const greetingLocation = await fetchGreetingLocation();
+console.log('👋 问候位置:', greetingLocation);
+
 const db = getDb(env.DB);
 
 // 获取 Links 数据
@@ -345,8 +413,8 @@ const scriptData = {
   yearEnd: progress.yearEnd,
   monthStart: progress.monthStart,
   monthEnd: progress.monthEnd,
-  weekStart: progress.weekStart,
-  weekEnd: progress.weekEnd,
+  weekStart: 0,
+  weekEnd: 0,
   holidayTarget: holidayTarget,
 };
 ---
@@ -367,22 +435,13 @@ const scriptData = {
       </div>
     </div>
 
-    <!-- 2. 距离最近的传统节日 -->
+    <!-- 2. 🆕 你好，来自某市某县的朋友 -->
     <div class="dashboard-card glass-panel">
       <div class="card-header">
-        <span class="card-icon">🎉</span>
-        <span class="card-title">距离最近的传统节日</span>
+        <span class="card-icon">👋</span>
+        <span class="card-title">来自远方的朋友</span>
       </div>
-      {nextHoliday ? (
-        <div class="holiday-content">
-          <div class="holiday-name">{nextHoliday.name}</div>
-          <div class="holiday-countdown">
-            还有 <strong>{nextHoliday.days_until}</strong> 天
-          </div>
-        </div>
-      ) : (
-        <p class="empty-state">暂无节日数据</p>
-      )}
+      <p class="greeting-text">你好，来自 <strong>{greetingLocation}</strong> 的朋友！</p>
     </div>
 
     <!-- 3. 日历 & 进度 -->
@@ -407,7 +466,7 @@ const scriptData = {
           <span class="progress-label" id="monthPercent">{progress.monthProgress}%</span>
         </div>
         <div class="progress-item">
-          <span id="weekLabel">距离下周一 <strong id="weekRemain">{progress.weekRemainText}</strong></span>
+          <span id="weekLabel">本周剩余 <strong id="weekRemain">{progress.weekRemainText}</strong></span>
           <div class="progress-bar">
             <div class="progress-fill" id="weekProgressFill" style="width: {progress.weekProgress}%;"></div>
           </div>
@@ -601,6 +660,16 @@ const scriptData = {
   .time-seconds { font-size: 2.8rem; font-weight: 700; font-family: var(--font-mono); letter-spacing: 0.04em; }
   .time-date { font-size: 1rem; color: var(--color-text-muted); margin-top: 0.2rem; }
 
+  .greeting-text {
+    font-size: 1.1rem;
+    text-align: center;
+    padding: 0.8rem 0;
+    color: var(--color-text);
+  }
+  .greeting-text strong {
+    color: var(--color-accent);
+  }
+
   .weather-content { display: flex; flex-direction: column; gap: 0.2rem; }
   .weather-main { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.6rem; }
   .weather-temp-group { display: flex; align-items: baseline; gap: 0.3rem; }
@@ -609,11 +678,6 @@ const scriptData = {
   .weather-desc { font-size: 0.85rem; color: var(--color-text-secondary); }
   .weather-extras { display: flex; flex-wrap: wrap; gap: 0.2rem 0.6rem; font-size: 0.75rem; color: var(--color-text-muted); }
   .weather-extended { display: flex; flex-wrap: wrap; gap: 0.2rem 0.6rem; font-size: 0.7rem; color: var(--color-text-muted); }
-
-  .holiday-content { text-align: center; padding: 0.5rem 0; }
-  .holiday-name { font-size: 1.1rem; font-weight: 600; }
-  .holiday-countdown { font-size: 1.2rem; margin-top: 0.2rem; }
-  .holiday-countdown strong { font-size: 1.8rem; color: var(--color-accent); }
 
   .saying-text {
     font-size: 1rem;
@@ -725,7 +789,6 @@ const scriptData = {
   const {
     yearStart, yearEnd,
     monthStart, monthEnd,
-    weekStart, weekEnd,
     holidayTarget,
   } = scriptData;
 
@@ -785,7 +848,7 @@ const scriptData = {
     const now = Date.now();
     updateItem('yearRemain', 'yearProgressFill', 'yearPercent', yearStart, yearEnd, now, updateProgress);
     updateItem('monthRemain', 'monthProgressFill', 'monthPercent', monthStart, monthEnd, now, updateProgress);
-    updateItem('weekRemain', 'weekProgressFill', 'weekPercent', weekStart, weekEnd, now, updateProgress);
+    // 周剩余进度已由服务端计算并渲染，客户端不需要更新
     if (holidayTarget !== null) {
       const diff = holidayTarget - now;
       if (diff > 0) {
