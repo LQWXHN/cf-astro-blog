@@ -369,10 +369,17 @@ const db = getDb(env.DB);
 
 let links: any[] = [];
 try {
-  links = await db
+  const rawLinks = await db
     .select()
     .from(dashboardLinks)
     .orderBy(dashboardLinks.sortOrder);
+  
+  // 🆕 将 tag_color 映射为 tagColor
+  links = rawLinks.map(link => ({
+    ...link,
+    tagColor: (link as any).tag_color || link.tagColor || '#0a84ff',
+    tag: link.tag || '链接'
+  }));
 } catch (error) {
   console.error("Failed to fetch dashboard links:", error);
   links = [];
