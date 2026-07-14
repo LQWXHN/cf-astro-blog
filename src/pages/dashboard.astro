@@ -374,7 +374,7 @@ try {
     .from(dashboardLinks)
     .orderBy(dashboardLinks.sortOrder);
   
-  // 🆕 将 tag_color 映射为 tagColor
+  // 🔧 将数据库列名 tag_color 映射为 tagColor
   links = rawLinks.map(link => ({
     ...link,
     tagColor: (link as any).tag_color || link.tagColor || '#0a84ff',
