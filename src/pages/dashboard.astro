@@ -252,32 +252,58 @@ async function fetchHoliday() {
   return { nearby: next ? [next] : [] };
 }
 
-// ===== 获取一言 =====
+// ===== 🆕 获取每日一言（每天三条） =====
 async function fetchSaying(env: any) {
   try {
     const today = new Date().toISOString().slice(0, 10);
     const stored = await env.SESSION?.get('saying_today', 'json');
-    if (stored && stored.date === today && stored.text) {
-      return { text: stored.text };
+    if (stored && stored.date === today && stored.texts && stored.texts.length >= 3) {
+      return { texts: stored.texts };
     }
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(`https://uapis.cn/api/v1/saying`, {
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    if (data && data.text) {
-      await env.SESSION?.put('saying_today', JSON.stringify({
-        date: today,
-        text: data.text
-      }), { expirationTtl: 86400 });
-      return { text: data.text };
+    
+    // 获取三条名言
+    const texts: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const res = await fetch(`https://uapis.cn/api/v1/saying`, {
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (data && data.text) {
+          texts.push(data.text);
+        }
+      } catch (e) {
+        console.error(`获取第 ${i+1} 条名言失败:`, e);
+      }
+      // 添加小延迟避免请求过快
+      if (i < 2) await new Promise(r => setTimeout(r, 300));
     }
-    return null;
+    
+    // 如果获取失败，使用默认三条
+    const finalTexts = texts.length >= 3 ? texts : [
+      '生活不是等待暴风雨过去，而是学会在雨中跳舞。',
+      '世界上只有一种真正的英雄主义，那就是认清生活的真相后依然热爱生活。',
+      '不要为成功而努力，要为做一个有价值的人而努力。',
+    ];
+    
+    await env.SESSION?.put('saying_today', JSON.stringify({
+      date: today,
+      texts: finalTexts
+    }), { expirationTtl: 86400 });
+    
+    return { texts: finalTexts };
   } catch {
-    return null;
+    return { 
+      texts: [
+        '生活不是等待暴风雨过去，而是学会在雨中跳舞。',
+        '世界上只有一种真正的英雄主义，那就是认清生活的真相后依然热爱生活。',
+        '不要为成功而努力，要为做一个有价值的人而努力。',
+      ] 
+    };
   }
 }
 
@@ -330,7 +356,6 @@ const holidayTarget = nextHoliday ? new Date(nextHoliday.date).getTime() : null;
 
 console.log('🎉 下一个节日:', nextHoliday);
 
-// 只传递节日目标时间戳，所有进度计算都在客户端完成
 const scriptData = {
   holidayTarget: holidayTarget,
 };
@@ -356,7 +381,7 @@ const scriptData = {
     <div class="dashboard-card glass-panel">
       <div class="card-header">
         <span class="card-icon">👋</span>
-        <span class="card-title">来自远方的朋友</span>
+        <span class="card-title">欢迎来到小站</span>
       </div>
       <p class="greeting-text">你好，来自 <strong>{greeting}</strong> 的朋友！</p>
     </div>
@@ -391,19 +416,23 @@ const scriptData = {
         </div>
         {nextHoliday && (
           <div class="next-holiday" id="holidayInfo">
-            🎉 距离 <strong>{nextHoliday.name}</strong> 还有 <strong id="holidayRemain">{nextHoliday.days_until}</strong> 天
+             距离 <strong>{nextHoliday.name}</strong> 还有 <strong id="holidayRemain">{nextHoliday.days_until}</strong> 天
           </div>
         )}
       </div>
     </div>
 
-    <!-- 4. 今日一言 -->
+    <!-- 4. 🆕 每日一言（三条） -->
     <div class="dashboard-card glass-panel">
       <div class="card-header">
         <span class="card-icon">💬</span>
-        <span class="card-title">今日一言</span>
+        <span class="card-title">每日一言</span>
       </div>
-      <p class="saying-text">“{saying?.text || '加载中...'}”</p>
+      <div class="saying-list">
+        {saying?.texts?.map((text: string) => (
+          <p class="saying-text">“{text}”</p>
+        ))}
+      </div>
     </div>
 
     <!-- 5. 今日天气 -->
@@ -509,34 +538,47 @@ const scriptData = {
       )}
     </div>
 
-    <!-- 7. Links -->
+    <!-- 7. 🆕 Links 区域（优化卡片风格） -->
     <div class="dashboard-card glass-panel" style="grid-column: 1 / -1;">
       <div class="card-header">
         <span class="card-icon">🔗</span>
         <span class="card-title">我的小站链接，欢迎到访哦！</span>
       </div>
       {links.length > 0 ? (
-        <div class="links-grid">
+        <div class="links-grid-new">
           {links.map((link) => (
             <a
               href={link.url}
               target="_blank"
               rel="noopener noreferrer"
-              class="link-item"
+              class="link-card-new"
             >
-              <div class="link-icon">
-                {link.icon ? (
-                  link.icon.startsWith('http') ? (
-                    <img src={link.icon} alt="" />
+              <div class="link-card-new-header">
+                <div class="link-card-new-icon">
+                  {link.icon ? (
+                    link.icon.startsWith('http') ? (
+                      <img src={link.icon} alt="" />
+                    ) : (
+                      <span>{link.icon}</span>
+                    )
                   ) : (
-                    <span>{link.icon}</span>
-                  )
-                ) : (
-                  <span>🔗</span>
-                )}
+                    <span>🔗</span>
+                  )}
+                </div>
+                <svg class="link-card-new-export" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                  <polyline points="15 3 21 3 21 9"/>
+                  <line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
               </div>
-              <span class="link-title">{link.title}</span>
-              <span class="link-arrow">→</span>
+              <div class="link-card-new-body">
+                <div class="link-card-new-title">{link.title}</div>
+                <div class="link-card-new-desc">{link.description || '点击访问'}</div>
+              </div>
+              <div class="link-card-new-footer">
+                <span class="link-card-new-tag">快捷访问</span>
+                <span class="link-card-new-arrow">→</span>
+              </div>
             </a>
           ))}
         </div>
@@ -596,14 +638,24 @@ const scriptData = {
   .weather-extras { display: flex; flex-wrap: wrap; gap: 0.2rem 0.6rem; font-size: 0.75rem; color: var(--color-text-muted); }
   .weather-extended { display: flex; flex-wrap: wrap; gap: 0.2rem 0.6rem; font-size: 0.7rem; color: var(--color-text-muted); }
 
+  .saying-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding: 0.2rem 0;
+  }
   .saying-text {
-    font-size: 1rem;
+    font-size: 0.9rem;
     font-style: italic;
     color: var(--color-text-secondary);
-    padding: 0.3rem 0;
     line-height: 1.6;
     text-align: center;
     margin: 0;
+    padding: 0.2rem 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .saying-text:last-child {
+    border-bottom: none;
   }
 
   .hot-list { list-style: none; padding: 0; margin: 0; }
@@ -627,78 +679,142 @@ const scriptData = {
   .progress-label { font-size: 0.7rem; color: var(--color-text-muted); }
   .next-holiday { margin-top: 0.3rem; padding: 0.3rem 0.6rem; background: var(--color-accent-soft); border-radius: var(--radius-inner); text-align: center; font-size: 0.85rem; }
 
-  .links-grid {
+  /* ===== 🆕 链接卡片新样式（参考 BingCard 风格） ===== */
+  .links-grid-new {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 0.8rem;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.2rem;
   }
 
-  .link-item {
+  .link-card-new {
     display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.6rem 0.8rem;
-    border-radius: 12px;
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.06);
+    flex-direction: column;
+    padding: 1.2rem 1.5rem 1rem;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid var(--color-border, rgba(0,0,0,0.06));
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
     text-decoration: none;
     color: var(--color-text);
     transition: all 0.25s ease;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    gap: 0.8rem;
   }
 
-  .link-item:hover {
-    background: rgba(255,255,255,0.08);
-    border-color: rgba(10,132,255,0.25);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  [data-theme="dark"] .link-card-new {
+    background: rgba(30, 40, 60, 0.8);
+    border-color: rgba(255, 255, 255, 0.06);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
   }
 
-  .link-icon {
-    width: 28px;
-    height: 28px;
-    flex-shrink: 0;
+  .link-card-new:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
+    border-color: rgba(10, 132, 255, 0.2);
+  }
+
+  .link-card-new-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .link-card-new-icon {
+    width: 40px;
+    height: 40px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.1rem;
-    border-radius: 6px;
-    overflow: hidden;
-    background: rgba(255,255,255,0.04);
+    font-size: 1.4rem;
+    border-radius: 10px;
+    background: rgba(10, 132, 255, 0.06);
+    flex-shrink: 0;
   }
 
-  .link-icon img {
+  .link-card-new-icon img {
     width: 100%;
     height: 100%;
     object-fit: contain;
+    border-radius: 8px;
   }
 
-  .link-title {
+  .link-card-new-export {
+    color: var(--color-text-muted);
+    opacity: 0.5;
+    transition: opacity 0.2s;
+    flex-shrink: 0;
+  }
+
+  .link-card-new:hover .link-card-new-export {
+    opacity: 0.8;
+  }
+
+  .link-card-new-body {
     flex: 1;
-    font-size: 0.85rem;
-    font-weight: 500;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
   }
 
-  .link-arrow {
-    font-size: 0.7rem;
+  .link-card-new-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text);
+    line-height: 1.3;
+  }
+
+  .link-card-new-desc {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .link-card-new-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid var(--color-border);
+    padding-top: 0.6rem;
+    margin-top: 0.2rem;
+  }
+
+  .link-card-new-tag {
+    font-size: 0.65rem;
+    padding: 0.15rem 0.8rem;
+    border-radius: 999px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    background: rgba(10, 132, 255, 0.08);
+    color: var(--color-accent);
+  }
+
+  [data-theme="dark"] .link-card-new-tag {
+    background: rgba(87, 166, 255, 0.15);
+  }
+
+  .link-card-new-arrow {
+    font-size: 0.8rem;
     color: var(--color-text-muted);
     transition: transform 0.2s;
   }
 
-  .link-item:hover .link-arrow {
+  .link-card-new:hover .link-card-new-arrow {
     transform: translateX(4px);
     color: var(--color-accent);
   }
 
-  .empty-state { color: var(--color-text-muted); font-size: 0.85rem; text-align: center; }
-
+  /* ===== 响应式 ===== */
   @media (max-width: 1024px) {
     .dashboard-grid { grid-template-columns: repeat(2, 1fr); }
   }
   @media (max-width: 640px) {
     .dashboard-grid { grid-template-columns: 1fr; }
+    .links-grid-new { grid-template-columns: 1fr; }
   }
 </style>
 
@@ -724,7 +840,7 @@ const scriptData = {
     });
   }
 
-  // ===== 🆕 计算年剩余（客户端实时计算） =====
+  // ===== 计算年剩余 =====
   function updateYearRemain() {
     const now = new Date();
     const yearStart = new Date(now.getFullYear(), 0, 1);
@@ -754,7 +870,7 @@ const scriptData = {
     document.getElementById('yearPercent').textContent = progressRounded + '%';
   }
 
-  // ===== 🆕 计算月剩余（客户端实时计算） =====
+  // ===== 计算月剩余 =====
   function updateMonthRemain() {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -784,7 +900,7 @@ const scriptData = {
     document.getElementById('monthPercent').textContent = progressRounded + '%';
   }
 
-  // ===== 🆕 计算周剩余（客户端实时计算） =====
+  // ===== 计算周剩余 =====
   function updateWeekRemain() {
     const now = new Date();
     const w = now.getDay() || 7;
@@ -828,23 +944,18 @@ const scriptData = {
   }
 
   // ===== 启动所有定时器 =====
-  // 时钟：每秒
   updateClock();
   setInterval(updateClock, 1000);
   
-  // 年剩余：每秒
   updateYearRemain();
   setInterval(updateYearRemain, 1000);
   
-  // 月剩余：每秒
   updateMonthRemain();
   setInterval(updateMonthRemain, 1000);
   
-  // 周剩余：每秒
   updateWeekRemain();
   setInterval(updateWeekRemain, 1000);
   
-  // 节日倒计时：每分钟
   updateHoliday();
   setInterval(updateHoliday, 60000);
 </script>
