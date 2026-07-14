@@ -120,10 +120,18 @@ linksRoutes.get("/new", async (c) => {
         <div class="form-group">
           <label for="tagColor">标签颜色</label>
           <div style="display:flex; gap:0.5rem; align-items:center;">
-            <input type="color" id="tagColor" name="tagColor" class="form-input" style="width:60px; padding:0.2rem; height:40px;" value="#0a84ff" />
-            <span style="color:var(--text-muted); font-size:0.85rem;">点击选择颜色</span>
+            <div style="position:relative; width:40px; height:40px; border-radius:8px; overflow:hidden; border:2px solid var(--border); flex-shrink:0;">
+              <input 
+                type="color" 
+                id="tagColor" 
+                name="tagColor" 
+                style="position:absolute; top:-4px; left:-4px; width:calc(100% + 8px); height:calc(100% + 8px); padding:0; border:none; cursor:pointer; background:none;" 
+                value="#0a84ff" 
+              />
+            </div>
+            <span style="color:var(--text-muted); font-size:0.85rem;">点击色块选择颜色</span>
           </div>
-          <p class="form-help">标签的背景色，十六进制颜色值</p>
+          <p class="form-help">标签的背景色，点击色块选择</p>
         </div>
         <div class="form-group">
           <label for="sortOrder">排序权重（数字越小越靠前）</label>
@@ -203,10 +211,21 @@ linksRoutes.get("/:id/edit", async (c) => {
         <div class="form-group">
           <label for="tagColor">标签颜色</label>
           <div style="display:flex; gap:0.5rem; align-items:center;">
-            <input type="color" id="tagColor" name="tagColor" class="form-input" style="width:60px; padding:0.2rem; height:40px;" value="${escapeAttribute(link.tagColor || '#0a84ff')}" />
-            <span style="color:var(--text-muted); font-size:0.85rem;">当前标签预览：<span style="background:${escapeAttribute(link.tagColor || '#0a84ff')}; padding:0.1rem 0.6rem; border-radius:999px; color:#fff; font-size:0.7rem;">${escapeAttribute(link.tag || '链接')}</span></span>
+            <div style="position:relative; width:40px; height:40px; border-radius:8px; overflow:hidden; border:2px solid var(--border); flex-shrink:0;">
+              <input 
+                type="color" 
+                id="tagColor" 
+                name="tagColor" 
+                style="position:absolute; top:-4px; left:-4px; width:calc(100% + 8px); height:calc(100% + 8px); padding:0; border:none; cursor:pointer; background:none;" 
+                value="${escapeAttribute(link.tagColor || '#0a84ff')}" 
+              />
+            </div>
+            <span style="background:${escapeAttribute(link.tagColor || '#0a84ff')}; color:#fff; padding:0.15rem 0.8rem; border-radius:999px; font-size:0.75rem; font-weight:500;">
+              ${escapeAttribute(link.tag || '标签')}
+            </span>
+            <span style="color:var(--text-muted); font-size:0.85rem;">点击色块选择颜色</span>
           </div>
-          <p class="form-help">标签的背景色，十六进制颜色值</p>
+          <p class="form-help">标签的背景色，点击色块选择</p>
         </div>
         <div class="form-group">
           <label for="sortOrder">排序权重</label>
