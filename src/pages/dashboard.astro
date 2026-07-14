@@ -248,7 +248,7 @@ async function fetchHotboard() {
 // ===== 获取节日 =====
 async function fetchHoliday() {
   const next = getNextHoliday();
-  console.log(' 下一个节日:', next);
+  console.log('🎉 下一个节日:', next);
   return { nearby: next ? [next] : [] };
 }
 
@@ -318,6 +318,42 @@ function getWeatherEmoji(code: string): string {
   return map[code] || '🌤️';
 }
 
+// ===== 🆕 十六进制转HSL色相 =====
+function hexToHue(hex: string): number {
+  const cleaned = hex.replace('#', '');
+  const r = parseInt(cleaned.substring(0, 2), 16) / 255;
+  const g = parseInt(cleaned.substring(2, 4), 16) / 255;
+  const b = parseInt(cleaned.substring(4, 6), 16) / 255;
+  
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0;
+  
+  if (max !== min) {
+    const d = max - min;
+    if (max === r) {
+      h = ((g - b) / d) % 6;
+    } else if (max === g) {
+      h = (b - r) / d + 2;
+    } else {
+      h = (r - g) / d + 4;
+    }
+    h = h * 60;
+    if (h < 0) h += 360;
+  }
+  return Math.round(h);
+}
+
+// ===== 🆕 生成标签样式 =====
+function generateTagStyle(hexColor: string): { bg: string; text: string } {
+  const hue = hexToHue(hexColor || '#0a84ff');
+  // 背景：低饱和度、高亮度、半透明（14%透明度）
+  const bg = `hsla(${hue}, 60%, 92%, 0.14)`;
+  // 文字：同色相，加深（饱和度+25%，亮度-48%）
+  const text = `hsl(${hue}, 85%, 44%)`;
+  return { bg, text };
+}
+
 // ===== 获取数据 =====
 const visitorIP = getVisitorIPFromHeaders(Astro.request);
 console.log('🌐 访客真实IP:', visitorIP);
@@ -342,6 +378,12 @@ try {
   links = [];
 }
 
+// ===== 🆕 为每个链接生成标签样式 =====
+const linksWithTagStyle = links.map(link => ({
+  ...link,
+  tagStyle: generateTagStyle(link.tagColor || '#0a84ff')
+}));
+
 const [hotboard, holiday, saying] = await Promise.all([
   fetchHotboard(),
   fetchHoliday(),
@@ -351,7 +393,7 @@ const [hotboard, holiday, saying] = await Promise.all([
 const nextHoliday = holiday?.nearby?.[0] || null;
 const holidayTarget = nextHoliday ? new Date(nextHoliday.date).getTime() : null;
 
-console.log(' 下一个节日:', nextHoliday);
+console.log('🎉 下一个节日:', nextHoliday);
 
 const scriptData = {
   holidayTarget: holidayTarget,
@@ -535,15 +577,15 @@ const scriptData = {
       )}
     </div>
 
-    <!-- 7. 链接卡片 -->
+    <!-- 7. 链接卡片（🆕 标签自动配色） -->
     <div class="dashboard-card glass-panel" style="grid-column: 1 / -1;">
       <div class="card-header">
         <span class="card-icon">🔗</span>
         <span class="card-title">我的小站链接</span>
       </div>
-      {links.length > 0 ? (
+      {linksWithTagStyle.length > 0 ? (
         <div class="links-grid-new">
-          {links.map((link) => (
+          {linksWithTagStyle.map((link) => (
             <a
               href={link.url}
               target="_blank"
@@ -573,7 +615,7 @@ const scriptData = {
                 <div class="link-card-new-desc">{link.description || ''}</div>
               </div>
               <div class="link-card-new-footer">
-                <span class="link-card-new-tag" style="background:{link.tagColor || '#0a84ff'}; color:#fff;">
+                <span class="link-card-new-tag" style="background:{link.tagStyle.bg}; color:{link.tagStyle.text};">
                   {link.tag || '链接'}
                 </span>
                 <span class="link-card-new-arrow">→</span>
@@ -789,6 +831,8 @@ const scriptData = {
     font-weight: 500;
     letter-spacing: 0.02em;
     display: inline-block;
+    font-family: "Inter", system-ui, "思源黑体", "PingFang SC", sans-serif;
+    font-weight: 400;
   }
 
   .link-card-new-arrow {

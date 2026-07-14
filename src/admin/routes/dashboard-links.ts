@@ -131,7 +131,7 @@ linksRoutes.get("/new", async (c) => {
             </div>
             <span style="color:var(--text-muted); font-size:0.85rem;">点击色块选择颜色</span>
           </div>
-          <p class="form-help">标签的背景色，点击色块选择</p>
+          <p class="form-help">标签的主色，系统会自动生成浅色背景和同色系深色文字</p>
         </div>
         <div class="form-group">
           <label for="sortOrder">排序权重（数字越小越靠前）</label>
@@ -220,12 +220,12 @@ linksRoutes.get("/:id/edit", async (c) => {
                 value="${escapeAttribute(link.tagColor || '#0a84ff')}" 
               />
             </div>
-            <span style="background:${escapeAttribute(link.tagColor || '#0a84ff')}; color:#fff; padding:0.15rem 0.8rem; border-radius:999px; font-size:0.75rem; font-weight:500;">
+            <span style="background:${escapeAttribute(link.tagColor || '#0a84ff')}; color:#fff; padding:0.15rem 0.8rem; border-radius:999px; font-size:0.75rem; font-weight:500; opacity:0.8;">
               ${escapeAttribute(link.tag || '标签')}
             </span>
-            <span style="color:var(--text-muted); font-size:0.85rem;">点击色块选择颜色</span>
+            <span style="color:var(--text-muted); font-size:0.85rem;">点击色块选择主色，自动生成浅色背景+同色文字</span>
           </div>
-          <p class="form-help">标签的背景色，点击色块选择</p>
+          <p class="form-help">选择主色后，前台会自动生成柔和半透明背景和同色系深色文字</p>
         </div>
         <div class="form-group">
           <label for="sortOrder">排序权重</label>
