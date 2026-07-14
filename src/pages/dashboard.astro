@@ -596,7 +596,7 @@ const scriptData = {
       )}
     </div>
 
-    <!-- 7. 链接卡片（最终修复：使用 style={tagCSS}） -->
+    <!-- 7. 链接卡片 -->
     <div class="dashboard-card glass-panel" style="grid-column: 1 / -1;">
       <div class="card-header">
         <span class="card-icon">🔗</span>
@@ -605,7 +605,6 @@ const scriptData = {
       {linksWithTagStyle.length > 0 ? (
         <div class="links-grid-new">
           {linksWithTagStyle.map((link) => {
-            // ✅ 关键：在 JS 中拼接完整样式字符串
             const tagCSS = `background:${link.tagStyle.bg}; color:${link.tagStyle.text};`;
             return (
               <a
@@ -643,7 +642,7 @@ const scriptData = {
                   >
                     {link.tag || '链接'}
                   </span>
-                  <span class="link-card-new-arrow">→</span>
+                  <span class="link-card-new-arrow"> </span>
                 </div>
               </a>
             );
@@ -859,7 +858,6 @@ const scriptData = {
     display: inline-block;
     font-family: "Inter", system-ui, "思源黑体", "PingFang SC", sans-serif;
     font-weight: 400;
-    /* ✅ 背景和颜色由内联 style 控制，这里不写 */
   }
 
   .link-card-new-arrow {
@@ -884,137 +882,169 @@ const scriptData = {
 </style>
 
 <script define:vars={{ scriptData }}>
-  const {
-    holidayTarget,
-  } = scriptData;
+  document.addEventListener('DOMContentLoaded', function() {
+    const {
+      holidayTarget,
+    } = scriptData;
 
-  function updateClock() {
-    const now = new Date();
-    const h = String(now.getHours()).padStart(2, '0');
-    const m = String(now.getMinutes()).padStart(2, '0');
-    const s = String(now.getSeconds()).padStart(2, '0');
-    document.getElementById('hours').textContent = h;
-    document.getElementById('minutes').textContent = m;
-    document.getElementById('seconds').textContent = s;
-    document.getElementById('dateDisplay').textContent = now.toLocaleDateString('zh-CN', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      weekday: 'long',
-    });
-  }
-
-  function updateYearRemain() {
-    const now = new Date();
-    const yearStart = new Date(now.getFullYear(), 0, 1);
-    const yearEnd = new Date(now.getFullYear() + 1, 0, 1);
-    const total = yearEnd.getTime() - yearStart.getTime();
-    const elapsed = now.getTime() - yearStart.getTime();
-    const progress = (elapsed / total) * 100;
-    const diff = yearEnd.getTime() - now.getTime();
-    
-    if (diff <= 0) {
-      document.getElementById('yearRemain').textContent = '已结束';
-      document.getElementById('yearProgressFill').style.width = '100%';
-      document.getElementById('yearPercent').textContent = '100%';
-      return;
-    }
-    
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    const secs = Math.floor((diff % (1000 * 60)) / 1000);
-    
-    document.getElementById('yearRemain').textContent = 
-      days + '天' + hours + '时' + mins + '分' + secs + '秒';
-    
-    const progressRounded = Math.round(progress * 10) / 10;
-    document.getElementById('yearProgressFill').style.width = progress + '%';
-    document.getElementById('yearPercent').textContent = progressRounded + '%';
-  }
-
-  function updateMonthRemain() {
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    const total = monthEnd.getTime() - monthStart.getTime();
-    const elapsed = now.getTime() - monthStart.getTime();
-    const progress = (elapsed / total) * 100;
-    const diff = monthEnd.getTime() - now.getTime();
-    
-    if (diff <= 0) {
-      document.getElementById('monthRemain').textContent = '已结束';
-      document.getElementById('monthProgressFill').style.width = '100%';
-      document.getElementById('monthPercent').textContent = '100%';
-      return;
-    }
-    
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    const secs = Math.floor((diff % (1000 * 60)) / 1000);
-    
-    document.getElementById('monthRemain').textContent = 
-      days + '天' + hours + '时' + mins + '分' + secs + '秒';
-    
-    const progressRounded = Math.round(progress * 10) / 10;
-    document.getElementById('monthProgressFill').style.width = progress + '%';
-    document.getElementById('monthPercent').textContent = progressRounded + '%';
-  }
-
-  function updateWeekRemain() {
-    const now = new Date();
-    const w = now.getDay() || 7;
-    const daySec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
-    const totalSec = (7 - w) * 86400 + (86400 - daySec);
-    
-    if (totalSec <= 0) {
-      document.getElementById('weekRemain').textContent = '已结束';
-      document.getElementById('weekProgressFill').style.width = '100%';
-      document.getElementById('weekPercent').textContent = '100%';
-      return;
-    }
-    
-    const days = Math.floor(totalSec / 86400);
-    const hours = Math.floor((totalSec % 86400) / 3600);
-    const mins = Math.floor((totalSec % 3600) / 60);
-    const secs = Math.floor(totalSec % 60);
-    
-    document.getElementById('weekRemain').textContent = 
-      days + '天' + hours + '时' + mins + '分' + secs + '秒';
-    
-    const weekElapsed = (w - 1) * 86400 + daySec;
-    const weekTotal = 7 * 86400;
-    const progress = (weekElapsed / weekTotal) * 100;
-    const progressRounded = Math.round(progress * 10) / 10;
-    document.getElementById('weekProgressFill').style.width = progress + '%';
-    document.getElementById('weekPercent').textContent = progressRounded + '%';
-  }
-
-  function updateHoliday() {
-    if (holidayTarget !== null) {
-      const diff = holidayTarget - Date.now();
-      if (diff > 0) {
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        document.getElementById('holidayRemain').textContent = days;
-      } else {
-        document.getElementById('holidayRemain').textContent = '0';
+    // ===== 北京时间时钟 =====
+    function updateClock() {
+      const now = new Date();
+      const h = String(now.getHours()).padStart(2, '0');
+      const m = String(now.getMinutes()).padStart(2, '0');
+      const s = String(now.getSeconds()).padStart(2, '0');
+      const hoursEl = document.getElementById('hours');
+      const minutesEl = document.getElementById('minutes');
+      const secondsEl = document.getElementById('seconds');
+      const dateDisplayEl = document.getElementById('dateDisplay');
+      if (hoursEl) hoursEl.textContent = h;
+      if (minutesEl) minutesEl.textContent = m;
+      if (secondsEl) secondsEl.textContent = s;
+      if (dateDisplayEl) {
+        dateDisplayEl.textContent = now.toLocaleDateString('zh-CN', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          weekday: 'long',
+        });
       }
     }
-  }
 
-  updateClock();
-  setInterval(updateClock, 1000);
-  
-  updateYearRemain();
-  setInterval(updateYearRemain, 1000);
-  
-  updateMonthRemain();
-  setInterval(updateMonthRemain, 1000);
-  
-  updateWeekRemain();
-  setInterval(updateWeekRemain, 1000);
-  
-  updateHoliday();
-  setInterval(updateHoliday, 60000);
+    // ===== 计算年剩余 =====
+    function updateYearRemain() {
+      const now = new Date();
+      const yearStart = new Date(now.getFullYear(), 0, 1);
+      const yearEnd = new Date(now.getFullYear() + 1, 0, 1);
+      const total = yearEnd.getTime() - yearStart.getTime();
+      const elapsed = now.getTime() - yearStart.getTime();
+      const progress = (elapsed / total) * 100;
+      const diff = yearEnd.getTime() - now.getTime();
+      
+      const remainEl = document.getElementById('yearRemain');
+      const fillEl = document.getElementById('yearProgressFill');
+      const percentEl = document.getElementById('yearPercent');
+      
+      if (diff <= 0) {
+        if (remainEl) remainEl.textContent = '已结束';
+        if (fillEl) fillEl.style.width = '100%';
+        if (percentEl) percentEl.textContent = '100%';
+        return;
+      }
+      
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const secs = Math.floor((diff % (1000 * 60)) / 1000);
+      
+      if (remainEl) {
+        remainEl.textContent = days + '天' + hours + '时' + mins + '分' + secs + '秒';
+      }
+      
+      const progressRounded = Math.round(progress * 10) / 10;
+      if (fillEl) fillEl.style.width = progress + '%';
+      if (percentEl) percentEl.textContent = progressRounded + '%';
+    }
+
+    // ===== 计算月剩余 =====
+    function updateMonthRemain() {
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const total = monthEnd.getTime() - monthStart.getTime();
+      const elapsed = now.getTime() - monthStart.getTime();
+      const progress = (elapsed / total) * 100;
+      const diff = monthEnd.getTime() - now.getTime();
+      
+      const remainEl = document.getElementById('monthRemain');
+      const fillEl = document.getElementById('monthProgressFill');
+      const percentEl = document.getElementById('monthPercent');
+      
+      if (diff <= 0) {
+        if (remainEl) remainEl.textContent = '已结束';
+        if (fillEl) fillEl.style.width = '100%';
+        if (percentEl) percentEl.textContent = '100%';
+        return;
+      }
+      
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const secs = Math.floor((diff % (1000 * 60)) / 1000);
+      
+      if (remainEl) {
+        remainEl.textContent = days + '天' + hours + '时' + mins + '分' + secs + '秒';
+      }
+      
+      const progressRounded = Math.round(progress * 10) / 10;
+      if (fillEl) fillEl.style.width = progress + '%';
+      if (percentEl) percentEl.textContent = progressRounded + '%';
+    }
+
+    // ===== 计算周剩余 =====
+    function updateWeekRemain() {
+      const now = new Date();
+      const w = now.getDay() || 7;
+      const daySec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+      const totalSec = (7 - w) * 86400 + (86400 - daySec);
+      
+      const remainEl = document.getElementById('weekRemain');
+      const fillEl = document.getElementById('weekProgressFill');
+      const percentEl = document.getElementById('weekPercent');
+      
+      if (totalSec <= 0) {
+        if (remainEl) remainEl.textContent = '已结束';
+        if (fillEl) fillEl.style.width = '100%';
+        if (percentEl) percentEl.textContent = '100%';
+        return;
+      }
+      
+      const days = Math.floor(totalSec / 86400);
+      const hours = Math.floor((totalSec % 86400) / 3600);
+      const mins = Math.floor((totalSec % 3600) / 60);
+      const secs = Math.floor(totalSec % 60);
+      
+      if (remainEl) {
+        remainEl.textContent = days + '天' + hours + '时' + mins + '分' + secs + '秒';
+      }
+      
+      const weekElapsed = (w - 1) * 86400 + daySec;
+      const weekTotal = 7 * 86400;
+      const progress = (weekElapsed / weekTotal) * 100;
+      const progressRounded = Math.round(progress * 10) / 10;
+      if (fillEl) fillEl.style.width = progress + '%';
+      if (percentEl) percentEl.textContent = progressRounded + '%';
+    }
+
+    // ===== 节日倒计时 =====
+    function updateHoliday() {
+      if (holidayTarget !== null) {
+        const diff = holidayTarget - Date.now();
+        const el = document.getElementById('holidayRemain');
+        if (el) {
+          if (diff > 0) {
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            el.textContent = days;
+          } else {
+            el.textContent = '0';
+          }
+        }
+      }
+    }
+
+    // ===== 启动所有定时器 =====
+    updateClock();
+    setInterval(updateClock, 1000);
+    
+    updateYearRemain();
+    setInterval(updateYearRemain, 1000);
+    
+    updateMonthRemain();
+    setInterval(updateMonthRemain, 1000);
+    
+    updateWeekRemain();
+    setInterval(updateWeekRemain, 1000);
+    
+    updateHoliday();
+    setInterval(updateHoliday, 60000);
+  });
 </script>
