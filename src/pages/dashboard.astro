@@ -318,12 +318,19 @@ function getWeatherEmoji(code: string): string {
   return map[code] || '🌤️';
 }
 
-// ===== 🆕 十六进制转HSL色相（带兜底） =====
+// ===== 🆕 十六进制转HSL色相（严格校验） =====
 function hexToHue(hex: string): number {
-  // 非法颜色兜底
-  if (!hex || !hex.startsWith('#') || hex.length !== 7) return 210; // 默认蓝色色相
-  
+  // 严格校验 #xxxxxx 7位格式
+  if (!hex || typeof hex !== 'string' || !hex.startsWith('#') || hex.length !== 7) {
+    console.warn('⚠️ 非法色号，使用默认蓝色', hex);
+    return 210;
+  }
   const cleaned = hex.replace('#', '');
+  // 校验字符是否0-9a-f
+  if (!/^[0-9a-fA-F]{6}$/.test(cleaned)) {
+    console.warn('⚠️ 色号格式错误', hex);
+    return 210;
+  }
   const r = parseInt(cleaned.substring(0, 2), 16) / 255;
   const g = parseInt(cleaned.substring(2, 4), 16) / 255;
   const b = parseInt(cleaned.substring(4, 6), 16) / 255;
@@ -347,11 +354,10 @@ function hexToHue(hex: string): number {
   return Math.round(h);
 }
 
-// ===== 🆕 生成标签样式（浅色模式：不透明度提高到0.65） =====
+// ===== 🆕 生成标签样式（透明度提高到0.75） =====
 function generateTagStyle(hexColor: string): { bg: string; text: string } {
   const hue = hexToHue(hexColor || '#0a84ff');
-  // 浅色模式：提高不透明度到 65%，让颜色明显可见
-  const bg = `hsla(${hue}, 70%, 82%, 0.65)`;
+  const bg = `hsla(${hue}, 70%, 82%, 0.75)`;
   const text = `hsl(${hue}, 85%, 28%)`;
   return { bg, text };
 }
@@ -376,10 +382,9 @@ try {
     .from(dashboardLinks)
     .orderBy(dashboardLinks.sortOrder);
   
-  // 将数据库列名 tag_color 映射为 tagColor
   links = rawLinks.map(link => {
     const tagColor = (link as any).tag_color || link.tagColor || '#0a84ff';
-    console.log("🔗 单条链接颜色", link.title, tagColor); // 调试日志
+    console.log("🔗 单条链接颜色", link.title, tagColor);
     return {
       ...link,
       tagColor,
@@ -392,17 +397,14 @@ try {
 }
 
 // ===== 为每个链接生成标签样式 =====
-const linksWithTagStyle = links.map(link => ({
-  ...link,
-  tagStyle: generateTagStyle(link.tagColor || '#0a84ff')
-}));
-
-console.log("🔗 最终链接数据", linksWithTagStyle.map(l => ({ 
-  title: l.title, 
-  tag: l.tag, 
-  tagColor: l.tagColor,
-  tagStyle: l.tagStyle 
-})));
+const linksWithTagStyle = links.map(link => {
+  const style = generateTagStyle(link.tagColor || '#0a84ff');
+  console.log("🔗 生成样式", link.title, style);
+  return {
+    ...link,
+    tagStyle: style
+  };
+});
 
 const [hotboard, holiday, saying] = await Promise.all([
   fetchHotboard(),
@@ -597,7 +599,7 @@ const scriptData = {
       )}
     </div>
 
-    <!-- 7. 链接卡片（🆕 使用 Astro 专用样式绑定） -->
+    <!-- 7. 链接卡片（🆕 用模板字符串拼接完整 style） -->
     <div class="dashboard-card glass-panel" style="grid-column: 1 / -1;">
       <div class="card-header">
         <span class="card-icon">🔗</span>
@@ -605,48 +607,50 @@ const scriptData = {
       </div>
       {linksWithTagStyle.length > 0 ? (
         <div class="links-grid-new">
-          {linksWithTagStyle.map((link) => (
-            <a
-              href={link.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="link-card-new"
-            >
-              <div class="link-card-new-header">
-                <div class="link-card-new-icon">
-                  {link.icon ? (
-                    link.icon.startsWith('http') ? (
-                      <img src={link.icon} alt="" />
+          {linksWithTagStyle.map((link) => {
+            // 直接拼接完整 style 字符串
+            const tagFullStyle = `background:${link.tagStyle.bg}; color:${link.tagStyle.text};`;
+            return (
+              <a
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="link-card-new"
+              >
+                <div class="link-card-new-header">
+                  <div class="link-card-new-icon">
+                    {link.icon ? (
+                      link.icon.startsWith('http') ? (
+                        <img src={link.icon} alt="" />
+                      ) : (
+                        <span>{link.icon}</span>
+                      )
                     ) : (
-                      <span>{link.icon}</span>
-                    )
-                  ) : (
-                    <span>🔗</span>
-                  )}
+                      <span>🔗</span>
+                    )}
+                  </div>
+                  <svg class="link-card-new-export" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" y1="14" x2="21" y2="3"/>
+                  </svg>
                 </div>
-                <svg class="link-card-new-export" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                  <polyline points="15 3 21 3 21 9"/>
-                  <line x1="10" y1="14" x2="21" y2="3"/>
-                </svg>
-              </div>
-              <div class="link-card-new-body">
-                <div class="link-card-new-title">{link.title}</div>
-                <div class="link-card-new-desc">{link.description || ''}</div>
-              </div>
-              <div class="link-card-new-footer">
-                <!-- 🆕 使用 style:background 和 style:color 单独绑定 -->
-                <span 
-                  class="link-card-new-tag" 
-                  style:background={link.tagStyle.bg} 
-                  style:color={link.tagStyle.text}
-                >
-                  {link.tag || '链接'}
-                </span>
-                <span class="link-card-new-arrow">→</span>
-              </div>
-            </a>
-          ))}
+                <div class="link-card-new-body">
+                  <div class="link-card-new-title">{link.title}</div>
+                  <div class="link-card-new-desc">{link.description || ''}</div>
+                </div>
+                <div class="link-card-new-footer">
+                  <span 
+                    class="link-card-new-tag" 
+                    style={tagFullStyle}
+                  >
+                    {link.tag || '链接'}
+                  </span>
+                  <span class="link-card-new-arrow">→</span>
+                </div>
+              </a>
+            );
+          })}
         </div>
       ) : (
         <p class="empty-state">暂无链接</p>
@@ -858,6 +862,7 @@ const scriptData = {
     display: inline-block;
     font-family: "Inter", system-ui, "思源黑体", "PingFang SC", sans-serif;
     font-weight: 400;
+    /* 注意：这里不写 background 和 color，由内联 style 控制 */
   }
 
   .link-card-new-arrow {
