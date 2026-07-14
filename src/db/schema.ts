@@ -435,6 +435,8 @@ export const dashboardLinks = sqliteTable(
     icon: text("icon"),
     url: text("url").notNull(),
     sortOrder: integer("sort_order").default(0),
+	tag: text("tag").default("链接"),      // 标签文字
+    tagColor: text("tag_color").default("#0a84ff"), // 标签颜色（十六进制）
     createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
     updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
   },

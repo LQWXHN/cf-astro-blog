@@ -252,7 +252,7 @@ async function fetchHoliday() {
   return { nearby: next ? [next] : [] };
 }
 
-// ===== 🆕 获取每日一言（每天三条） =====
+// ===== 获取每日一言（每天三条） =====
 async function fetchSaying(env: any) {
   try {
     const today = new Date().toISOString().slice(0, 10);
@@ -261,7 +261,6 @@ async function fetchSaying(env: any) {
       return { texts: stored.texts };
     }
     
-    // 获取三条名言
     const texts: string[] = [];
     for (let i = 0; i < 3; i++) {
       try {
@@ -279,11 +278,9 @@ async function fetchSaying(env: any) {
       } catch (e) {
         console.error(`获取第 ${i+1} 条名言失败:`, e);
       }
-      // 添加小延迟避免请求过快
       if (i < 2) await new Promise(r => setTimeout(r, 300));
     }
     
-    // 如果获取失败，使用默认三条
     const finalTexts = texts.length >= 3 ? texts : [
       '生活不是等待暴风雨过去，而是学会在雨中跳舞。',
       '世界上只有一种真正的英雄主义，那就是认清生活的真相后依然热爱生活。',
@@ -422,7 +419,7 @@ const scriptData = {
       </div>
     </div>
 
-    <!-- 4. 🆕 每日一言（三条） -->
+    <!-- 4. 每日一言（三条） -->
     <div class="dashboard-card glass-panel">
       <div class="card-header">
         <span class="card-icon">💬</span>
@@ -538,11 +535,11 @@ const scriptData = {
       )}
     </div>
 
-    <!-- 7. 🆕 Links 区域（优化卡片风格） -->
+    <!-- 7. 链接卡片 -->
     <div class="dashboard-card glass-panel" style="grid-column: 1 / -1;">
       <div class="card-header">
         <span class="card-icon">🔗</span>
-        <span class="card-title">我的小站链接，欢迎到访哦！</span>
+        <span class="card-title">我的小站链接</span>
       </div>
       {links.length > 0 ? (
         <div class="links-grid-new">
@@ -573,17 +570,19 @@ const scriptData = {
               </div>
               <div class="link-card-new-body">
                 <div class="link-card-new-title">{link.title}</div>
-                <div class="link-card-new-desc">{link.description || '点击访问'}</div>
+                <div class="link-card-new-desc">{link.description || ''}</div>
               </div>
               <div class="link-card-new-footer">
-                <span class="link-card-new-tag">快捷访问</span>
+                <span class="link-card-new-tag" style="background:{link.tagColor || '#0a84ff'}; color:#fff;">
+                  {link.tag || '链接'}
+                </span>
                 <span class="link-card-new-arrow">→</span>
               </div>
             </a>
           ))}
         </div>
       ) : (
-        <p class="empty-state">暂无链接，请后台添加</p>
+        <p class="empty-state">暂无链接</p>
       )}
     </div>
   </div>
@@ -679,10 +678,10 @@ const scriptData = {
   .progress-label { font-size: 0.7rem; color: var(--color-text-muted); }
   .next-holiday { margin-top: 0.3rem; padding: 0.3rem 0.6rem; background: var(--color-accent-soft); border-radius: var(--radius-inner); text-align: center; font-size: 0.85rem; }
 
-  /* ===== 🆕 链接卡片新样式（参考 BingCard 风格） ===== */
+  /* ===== 链接卡片样式 ===== */
   .links-grid-new {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 1.2rem;
   }
 
@@ -789,12 +788,7 @@ const scriptData = {
     border-radius: 999px;
     font-weight: 500;
     letter-spacing: 0.02em;
-    background: rgba(10, 132, 255, 0.08);
-    color: var(--color-accent);
-  }
-
-  [data-theme="dark"] .link-card-new-tag {
-    background: rgba(87, 166, 255, 0.15);
+    display: inline-block;
   }
 
   .link-card-new-arrow {
