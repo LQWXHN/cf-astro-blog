@@ -40,14 +40,13 @@ const HOLIDAYS: Array<{ name: string; date: string }> = [
   { name: '国庆节', date: '2026-10-01' },
 ];
 
-// ===== 🆕 获取北京时间对象 =====
+// ===== 获取北京时间对象 =====
 function getBeijingNow(): Date {
   const now = new Date();
-  const beijingTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
-  return beijingTime;
+  return new Date(now.getTime() + 8 * 60 * 60 * 1000);
 }
 
-// ===== 🆕 计算距离最近的传统节日（使用北京时间） =====
+// ===== 计算距离最近的传统节日 =====
 function getNextHoliday() {
   const now = getBeijingNow();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -89,7 +88,7 @@ function getNextHoliday() {
   return closest;
 }
 
-// ===== 🆕 获取访客真实 IP =====
+// ===== 获取访客真实 IP =====
 function getVisitorIPFromHeaders(request: Request): string | null {
   const cfIP = request.headers.get("cf-connecting-ip");
   if (cfIP && cfIP !== "") {
@@ -109,7 +108,7 @@ function getVisitorIPFromHeaders(request: Request): string | null {
   return null;
 }
 
-// ===== 🆕 获取完整地理位置（用于问候 + 天气定位） =====
+// ===== 获取完整地理位置 =====
 async function fetchFullLocation(ip: string | null): Promise<{ greeting: string; weatherCity: string; weatherDistrict: string }> {
   const defaultResult = { greeting: '远方', weatherCity: '北京', weatherDistrict: '' };
   
@@ -186,7 +185,7 @@ async function fetchFullLocation(ip: string | null): Promise<{ greeting: string;
   }
 }
 
-// ===== 获取天气数据（每4小时缓存） =====
+// ===== 获取天气数据 =====
 async function fetchWeather(cityName: string, districtName: string) {
   const location = districtName || cityName;
   if (!location || location === '') return null;
@@ -219,7 +218,7 @@ async function fetchWeather(cityName: string, districtName: string) {
   }
 }
 
-// ===== 获取热榜（每12小时缓存） =====
+// ===== 获取热榜 =====
 async function fetchHotboard() {
   const cacheKey = 'hotboard_cache';
   try {
@@ -246,14 +245,14 @@ async function fetchHotboard() {
   }
 }
 
-// ===== 获取节日（硬编码） =====
+// ===== 获取节日 =====
 async function fetchHoliday() {
   const next = getNextHoliday();
   console.log('🎉 下一个节日:', next);
   return { nearby: next ? [next] : [] };
 }
 
-// ===== 获取一言（每天00:00更新） =====
+// ===== 获取一言 =====
 async function fetchSaying(env: any) {
   try {
     const today = new Date().toISOString().slice(0, 10);
@@ -282,66 +281,7 @@ async function fetchSaying(env: any) {
   }
 }
 
-// ===== 🆕 计算日期进度（使用北京时间） =====
-function getDateProgress() {
-  const now = getBeijingNow();
-  
-  const yearStart = new Date(now.getFullYear(), 0, 1);
-  const yearEnd = new Date(now.getFullYear() + 1, 0, 1);
-  const yearTotal = yearEnd.getTime() - yearStart.getTime();
-  const yearElapsed = now.getTime() - yearStart.getTime();
-  const yearProgress = (yearElapsed / yearTotal) * 100;
-  
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const monthTotal = monthEnd.getTime() - monthStart.getTime();
-  const monthElapsed = now.getTime() - monthStart.getTime();
-  const monthProgress = (monthElapsed / monthTotal) * 100;
-  
-  const w = now.getDay() || 7;
-  const daySec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
-  const totalSec = (7 - w) * 86400 + (86400 - daySec);
-  
-  const remainDays = Math.floor(totalSec / 86400);
-  const remainHours = Math.floor((totalSec % 86400) / 3600);
-  const remainMins = Math.floor((totalSec % 3600) / 60);
-  const remainSecs = Math.floor(totalSec % 60);
-  
-  const weekElapsed = (w - 1) * 86400 + daySec;
-  const weekTotal = 7 * 86400;
-  const weekProgress = (weekElapsed / weekTotal) * 100;
-  
-  const yearRemainMs = yearEnd.getTime() - now.getTime();
-  const monthRemainMs = monthEnd.getTime() - now.getTime();
-  
-  function formatRemain(ms: number): string {
-    if (ms <= 0) return '已结束';
-    const days = Math.floor(ms / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const mins = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
-    const secs = Math.floor((ms % (1000 * 60)) / 1000);
-    let parts = [];
-    if (days > 0) parts.push(days + '天');
-    if (hours > 0) parts.push(hours + '时');
-    if (mins > 0) parts.push(mins + '分');
-    if (secs > 0) parts.push(secs + '秒');
-    return parts.join('') || '0秒';
-  }
-  
-  return {
-    yearProgress: Math.round(yearProgress * 10) / 10,
-    monthProgress: Math.round(monthProgress * 10) / 10,
-    weekProgress: Math.round(weekProgress * 10) / 10,
-    yearRemainText: formatRemain(yearRemainMs),
-    monthRemainText: formatRemain(monthRemainMs),
-    yearStart: yearStart.getTime(),
-    yearEnd: yearEnd.getTime(),
-    monthStart: monthStart.getTime(),
-    monthEnd: monthEnd.getTime(),
-  };
-}
-
-// 天气图标映射
+// ===== 天气图标映射 =====
 function getWeatherEmoji(code: string): string {
   const map: Record<string, string> = {
     '00': '☀️', '01': '☀️', '02': '⛅', '03': '⛅', '04': '☁️',
@@ -385,17 +325,13 @@ const [hotboard, holiday, saying] = await Promise.all([
   fetchSaying(env),
 ]);
 
-const progress = getDateProgress();
 const nextHoliday = holiday?.nearby?.[0] || null;
 const holidayTarget = nextHoliday ? new Date(nextHoliday.date).getTime() : null;
 
 console.log('🎉 下一个节日:', nextHoliday);
 
+// 只传递节日目标时间戳，所有进度计算都在客户端完成
 const scriptData = {
-  yearStart: progress.yearStart,
-  yearEnd: progress.yearEnd,
-  monthStart: progress.monthStart,
-  monthEnd: progress.monthEnd,
   holidayTarget: holidayTarget,
 };
 ---
@@ -433,18 +369,18 @@ const scriptData = {
       </div>
       <div class="calendar-content">
         <div class="progress-item">
-          <span id="yearLabel">本年剩余 <strong id="yearRemain">{progress.yearRemainText}</strong></span>
+          <span id="yearLabel">本年剩余 <strong id="yearRemain">计算中...</strong></span>
           <div class="progress-bar">
-            <div class="progress-fill" id="yearProgressFill" style="width: {progress.yearProgress}%;"></div>
+            <div class="progress-fill" id="yearProgressFill" style="width: 0%;"></div>
           </div>
-          <span class="progress-label" id="yearPercent">{progress.yearProgress}%</span>
+          <span class="progress-label" id="yearPercent">0%</span>
         </div>
         <div class="progress-item">
-          <span id="monthLabel">本月剩余 <strong id="monthRemain">{progress.monthRemainText}</strong></span>
+          <span id="monthLabel">本月剩余 <strong id="monthRemain">计算中...</strong></span>
           <div class="progress-bar">
-            <div class="progress-fill" id="monthProgressFill" style="width: {progress.monthProgress}%;"></div>
+            <div class="progress-fill" id="monthProgressFill" style="width: 0%;"></div>
           </div>
-          <span class="progress-label" id="monthPercent">{progress.monthProgress}%</span>
+          <span class="progress-label" id="monthPercent">0%</span>
         </div>
         <div class="progress-item">
           <span id="weekLabel">本周剩余 <strong id="weekRemain">计算中...</strong></span>
@@ -768,8 +704,6 @@ const scriptData = {
 
 <script define:vars={{ scriptData }}>
   const {
-    yearStart, yearEnd,
-    monthStart, monthEnd,
     holidayTarget,
   } = scriptData;
 
@@ -790,49 +724,79 @@ const scriptData = {
     });
   }
 
-  // ===== 更新进度（年/月/节日） =====
-  function updateItem(remainId, progressId, percentId, start, end, now, updateProgress) {
-    const total = end - start;
-    const elapsed = now - start;
-    let progressPercent = 0;
-    let remainText = '';
-    if (elapsed <= 0) {
-      progressPercent = 0;
-      remainText = '0天0时0分0秒';
-    } else if (elapsed >= total) {
-      progressPercent = 100;
-      remainText = '已结束';
-    } else {
-      progressPercent = (elapsed / total) * 100;
-      const diff = end - now;
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-      if (days > 0) {
-        remainText = days + '天' + hours + '时' + minutes + '分' + seconds + '秒';
-      } else {
-        let parts = [];
-        if (hours > 0) parts.push(hours + '时');
-        if (minutes > 0) parts.push(minutes + '分');
-        if (seconds > 0) parts.push(seconds + '秒');
-        remainText = parts.join('') || '0秒';
-      }
+  // ===== 🆕 计算年剩余（客户端实时计算） =====
+  function updateYearRemain() {
+    const now = new Date();
+    const yearStart = new Date(now.getFullYear(), 0, 1);
+    const yearEnd = new Date(now.getFullYear() + 1, 0, 1);
+    const total = yearEnd.getTime() - yearStart.getTime();
+    const elapsed = now.getTime() - yearStart.getTime();
+    const progress = (elapsed / total) * 100;
+    const diff = yearEnd.getTime() - now.getTime();
+    
+    if (diff <= 0) {
+      document.getElementById('yearRemain').textContent = '已结束';
+      document.getElementById('yearProgressFill').style.width = '100%';
+      document.getElementById('yearPercent').textContent = '100%';
+      return;
     }
-    document.getElementById(remainId).textContent = remainText;
-    if (updateProgress) {
-      const progressRounded = Math.round(progressPercent * 10) / 10;
-      document.getElementById(progressId).style.width = progressPercent + '%';
-      document.getElementById(percentId).textContent = progressRounded + '%';
-    }
+    
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const secs = Math.floor((diff % (1000 * 60)) / 1000);
+    
+    document.getElementById('yearRemain').textContent = 
+      days + '天' + hours + '时' + mins + '分' + secs + '秒';
+    
+    const progressRounded = Math.round(progress * 10) / 10;
+    document.getElementById('yearProgressFill').style.width = progress + '%';
+    document.getElementById('yearPercent').textContent = progressRounded + '%';
   }
 
-  // ===== 🆕 本周剩余（客户端实时计算） =====
+  // ===== 🆕 计算月剩余（客户端实时计算） =====
+  function updateMonthRemain() {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const total = monthEnd.getTime() - monthStart.getTime();
+    const elapsed = now.getTime() - monthStart.getTime();
+    const progress = (elapsed / total) * 100;
+    const diff = monthEnd.getTime() - now.getTime();
+    
+    if (diff <= 0) {
+      document.getElementById('monthRemain').textContent = '已结束';
+      document.getElementById('monthProgressFill').style.width = '100%';
+      document.getElementById('monthPercent').textContent = '100%';
+      return;
+    }
+    
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const secs = Math.floor((diff % (1000 * 60)) / 1000);
+    
+    document.getElementById('monthRemain').textContent = 
+      days + '天' + hours + '时' + mins + '分' + secs + '秒';
+    
+    const progressRounded = Math.round(progress * 10) / 10;
+    document.getElementById('monthProgressFill').style.width = progress + '%';
+    document.getElementById('monthPercent').textContent = progressRounded + '%';
+  }
+
+  // ===== 🆕 计算周剩余（客户端实时计算） =====
   function updateWeekRemain() {
     const now = new Date();
     const w = now.getDay() || 7;
     const daySec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
     const totalSec = (7 - w) * 86400 + (86400 - daySec);
+    
+    if (totalSec <= 0) {
+      document.getElementById('weekRemain').textContent = '已结束';
+      document.getElementById('weekProgressFill').style.width = '100%';
+      document.getElementById('weekPercent').textContent = '100%';
+      return;
+    }
     
     const days = Math.floor(totalSec / 86400);
     const hours = Math.floor((totalSec % 86400) / 3600);
@@ -844,18 +808,16 @@ const scriptData = {
     
     const weekElapsed = (w - 1) * 86400 + daySec;
     const weekTotal = 7 * 86400;
-    const weekProgress = Math.round((weekElapsed / weekTotal) * 1000) / 10;
-    document.getElementById('weekProgressFill').style.width = weekProgress + '%';
-    document.getElementById('weekPercent').textContent = weekProgress + '%';
+    const progress = (weekElapsed / weekTotal) * 100;
+    const progressRounded = Math.round(progress * 10) / 10;
+    document.getElementById('weekProgressFill').style.width = progress + '%';
+    document.getElementById('weekPercent').textContent = progressRounded + '%';
   }
 
-  // ===== 更新年/月/节日倒计时 =====
-  function updateCountdown(updateProgress) {
-    const now = Date.now();
-    updateItem('yearRemain', 'yearProgressFill', 'yearPercent', yearStart, yearEnd, now, updateProgress);
-    updateItem('monthRemain', 'monthProgressFill', 'monthPercent', monthStart, monthEnd, now, updateProgress);
+  // ===== 节日倒计时 =====
+  function updateHoliday() {
     if (holidayTarget !== null) {
-      const diff = holidayTarget - now;
+      const diff = holidayTarget - Date.now();
       if (diff > 0) {
         const days = Math.floor(diff / (1000 * 60 * 60 * 24));
         document.getElementById('holidayRemain').textContent = days;
@@ -866,14 +828,23 @@ const scriptData = {
   }
 
   // ===== 启动所有定时器 =====
+  // 时钟：每秒
   updateClock();
   setInterval(updateClock, 1000);
   
+  // 年剩余：每秒
+  updateYearRemain();
+  setInterval(updateYearRemain, 1000);
+  
+  // 月剩余：每秒
+  updateMonthRemain();
+  setInterval(updateMonthRemain, 1000);
+  
+  // 周剩余：每秒
   updateWeekRemain();
   setInterval(updateWeekRemain, 1000);
   
-  updateCountdown(true);
-  setInterval(() => {
-    updateCountdown(true);
-  }, 60000);
+  // 节日倒计时：每分钟
+  updateHoliday();
+  setInterval(updateHoliday, 60000);
 </script>
