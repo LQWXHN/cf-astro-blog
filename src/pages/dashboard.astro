@@ -596,7 +596,7 @@ const scriptData = {
       )}
     </div>
 
-    <!-- 7. 链接卡片（CSS变量方案） -->
+    <!-- 7. 链接卡片（最终修复：使用 style={tagCSS}） -->
     <div class="dashboard-card glass-panel" style="grid-column: 1 / -1;">
       <div class="card-header">
         <span class="card-icon">🔗</span>
@@ -604,45 +604,50 @@ const scriptData = {
       </div>
       {linksWithTagStyle.length > 0 ? (
         <div class="links-grid-new">
-          {linksWithTagStyle.map((link) => (
-            <a
-              href={link.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="link-card-new"
-              style:--tag-bg={link.tagStyle.bg}
-              style:--tag-text={link.tagStyle.text}
-            >
-              <div class="link-card-new-header">
-                <div class="link-card-new-icon">
-                  {link.icon ? (
-                    link.icon.startsWith('http') ? (
-                      <img src={link.icon} alt="" />
+          {linksWithTagStyle.map((link) => {
+            // ✅ 关键：在 JS 中拼接完整样式字符串
+            const tagCSS = `background:${link.tagStyle.bg}; color:${link.tagStyle.text};`;
+            return (
+              <a
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="link-card-new"
+              >
+                <div class="link-card-new-header">
+                  <div class="link-card-new-icon">
+                    {link.icon ? (
+                      link.icon.startsWith('http') ? (
+                        <img src={link.icon} alt="" />
+                      ) : (
+                        <span>{link.icon}</span>
+                      )
                     ) : (
-                      <span>{link.icon}</span>
-                    )
-                  ) : (
-                    <span>🔗</span>
-                  )}
+                      <span>🔗</span>
+                    )}
+                  </div>
+                  <svg class="link-card-new-export" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" y1="14" x2="21" y2="3"/>
+                  </svg>
                 </div>
-                <svg class="link-card-new-export" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                  <polyline points="15 3 21 3 21 9"/>
-                  <line x1="10" y1="14" x2="21" y2="3"/>
-                </svg>
-              </div>
-              <div class="link-card-new-body">
-                <div class="link-card-new-title">{link.title}</div>
-                <div class="link-card-new-desc">{link.description || ''}</div>
-              </div>
-              <div class="link-card-new-footer">
-                <span class="link-card-new-tag">
-                  {link.tag || '链接'}
-                </span>
-                <span class="link-card-new-arrow">→</span>
-              </div>
-            </a>
-          ))}
+                <div class="link-card-new-body">
+                  <div class="link-card-new-title">{link.title}</div>
+                  <div class="link-card-new-desc">{link.description || ''}</div>
+                </div>
+                <div class="link-card-new-footer">
+                  <span 
+                    class="link-card-new-tag" 
+                    style={tagCSS}
+                  >
+                    {link.tag || '链接'}
+                  </span>
+                  <span class="link-card-new-arrow">→</span>
+                </div>
+              </a>
+            );
+          })}
         </div>
       ) : (
         <p class="empty-state">暂无链接</p>
@@ -847,16 +852,14 @@ const scriptData = {
 
   .link-card-new-tag {
     font-size: 0.65rem;
-    padding: 0.15rem 0.8rem;
+    padding: 0.2rem 0.9rem;
     border-radius: 999px;
     font-weight: 500;
     letter-spacing: 0.02em;
     display: inline-block;
     font-family: "Inter", system-ui, "思源黑体", "PingFang SC", sans-serif;
     font-weight: 400;
-    /* 🆕 从父级 a 标签读取 CSS 变量 */
-    background: var(--tag-bg);
-    color: var(--tag-text);
+    /* ✅ 背景和颜色由内联 style 控制，这里不写 */
   }
 
   .link-card-new-arrow {
