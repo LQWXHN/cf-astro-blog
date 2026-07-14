@@ -318,13 +318,15 @@ function getWeatherEmoji(code: string): string {
   return map[code] || '🌤️';
 }
 
-// ===== 十六进制转HSL色相（严格校验） =====
+// ===== 🆕 十六进制转HSL色相（严格校验） =====
 function hexToHue(hex: string): number {
+  // 严格校验 #xxxxxx 7位格式
   if (!hex || typeof hex !== 'string' || !hex.startsWith('#') || hex.length !== 7) {
     console.warn('⚠️ 非法色号，使用默认蓝色', hex);
     return 210;
   }
   const cleaned = hex.replace('#', '');
+  // 校验字符是否0-9a-f
   if (!/^[0-9a-fA-F]{6}$/.test(cleaned)) {
     console.warn('⚠️ 色号格式错误', hex);
     return 210;
@@ -352,7 +354,7 @@ function hexToHue(hex: string): number {
   return Math.round(h);
 }
 
-// ===== 生成标签样式 =====
+// ===== 🆕 生成标签样式（透明度提高到0.75） =====
 function generateTagStyle(hexColor: string): { bg: string; text: string } {
   const hue = hexToHue(hexColor || '#0a84ff');
   const bg = `hsla(${hue}, 70%, 82%, 0.75)`;
@@ -394,6 +396,7 @@ try {
   links = [];
 }
 
+// ===== 为每个链接生成标签样式 =====
 const linksWithTagStyle = links.map(link => {
   const style = generateTagStyle(link.tagColor || '#0a84ff');
   console.log("🔗 生成样式", link.title, style);
@@ -596,7 +599,7 @@ const scriptData = {
       )}
     </div>
 
-    <!-- 7. 链接卡片（CSS变量方案） -->
+    <!-- 7. 链接卡片（🆕 用模板字符串拼接完整 style） -->
     <div class="dashboard-card glass-panel" style="grid-column: 1 / -1;">
       <div class="card-header">
         <span class="card-icon">🔗</span>
@@ -604,45 +607,50 @@ const scriptData = {
       </div>
       {linksWithTagStyle.length > 0 ? (
         <div class="links-grid-new">
-          {linksWithTagStyle.map((link) => (
-            <a
-              href={link.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="link-card-new"
-              style:--tag-bg={link.tagStyle.bg}
-              style:--tag-text={link.tagStyle.text}
-            >
-              <div class="link-card-new-header">
-                <div class="link-card-new-icon">
-                  {link.icon ? (
-                    link.icon.startsWith('http') ? (
-                      <img src={link.icon} alt="" />
+          {linksWithTagStyle.map((link) => {
+            // 直接拼接完整 style 字符串
+            const tagFullStyle = `background:${link.tagStyle.bg}; color:${link.tagStyle.text};`;
+            return (
+              <a
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="link-card-new"
+              >
+                <div class="link-card-new-header">
+                  <div class="link-card-new-icon">
+                    {link.icon ? (
+                      link.icon.startsWith('http') ? (
+                        <img src={link.icon} alt="" />
+                      ) : (
+                        <span>{link.icon}</span>
+                      )
                     ) : (
-                      <span>{link.icon}</span>
-                    )
-                  ) : (
-                    <span>🔗</span>
-                  )}
+                      <span>🔗</span>
+                    )}
+                  </div>
+                  <svg class="link-card-new-export" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" y1="14" x2="21" y2="3"/>
+                  </svg>
                 </div>
-                <svg class="link-card-new-export" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                  <polyline points="15 3 21 3 21 9"/>
-                  <line x1="10" y1="14" x2="21" y2="3"/>
-                </svg>
-              </div>
-              <div class="link-card-new-body">
-                <div class="link-card-new-title">{link.title}</div>
-                <div class="link-card-new-desc">{link.description || ''}</div>
-              </div>
-              <div class="link-card-new-footer">
-                <span class="link-card-new-tag">
-                  {link.tag || '链接'}
-                </span>
-                <span class="link-card-new-arrow">→</span>
-              </div>
-            </a>
-          ))}
+                <div class="link-card-new-body">
+                  <div class="link-card-new-title">{link.title}</div>
+                  <div class="link-card-new-desc">{link.description || ''}</div>
+                </div>
+                <div class="link-card-new-footer">
+                  <span 
+                    class="link-card-new-tag" 
+                    style={tagFullStyle}
+                  >
+                    {link.tag || '链接'}
+                  </span>
+                  <span class="link-card-new-arrow">→</span>
+                </div>
+              </a>
+            );
+          })}
         </div>
       ) : (
         <p class="empty-state">暂无链接</p>
@@ -854,9 +862,7 @@ const scriptData = {
     display: inline-block;
     font-family: "Inter", system-ui, "思源黑体", "PingFang SC", sans-serif;
     font-weight: 400;
-    /* 🆕 从父级 a 标签读取 CSS 变量 */
-    background: var(--tag-bg);
-    color: var(--tag-text);
+    /* 注意：这里不写 background 和 color，由内联 style 控制 */
   }
 
   .link-card-new-arrow {
@@ -885,6 +891,7 @@ const scriptData = {
     holidayTarget,
   } = scriptData;
 
+  // ===== 北京时间时钟 =====
   function updateClock() {
     const now = new Date();
     const h = String(now.getHours()).padStart(2, '0');
@@ -901,6 +908,7 @@ const scriptData = {
     });
   }
 
+  // ===== 计算年剩余 =====
   function updateYearRemain() {
     const now = new Date();
     const yearStart = new Date(now.getFullYear(), 0, 1);
@@ -930,6 +938,7 @@ const scriptData = {
     document.getElementById('yearPercent').textContent = progressRounded + '%';
   }
 
+  // ===== 计算月剩余 =====
   function updateMonthRemain() {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -959,6 +968,7 @@ const scriptData = {
     document.getElementById('monthPercent').textContent = progressRounded + '%';
   }
 
+  // ===== 计算周剩余 =====
   function updateWeekRemain() {
     const now = new Date();
     const w = now.getDay() || 7;
@@ -988,6 +998,7 @@ const scriptData = {
     document.getElementById('weekPercent').textContent = progressRounded + '%';
   }
 
+  // ===== 节日倒计时 =====
   function updateHoliday() {
     if (holidayTarget !== null) {
       const diff = holidayTarget - Date.now();
@@ -1000,6 +1011,7 @@ const scriptData = {
     }
   }
 
+  // ===== 启动所有定时器 =====
   updateClock();
   setInterval(updateClock, 1000);
   
